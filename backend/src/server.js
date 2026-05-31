@@ -25,7 +25,7 @@ const server = http.createServer(app);
 // Socket.io Server Setup
 const io = new Server(server, {
   cors: {
-    origin: process.env.CLIENT_URL ? [process.env.CLIENT_URL, 'http://localhost:5173', 'https://docs-clone-l1xx.onrender.com'] : ['http://localhost:5173', 'https://docs-clone-l1xx.onrender.com'],
+    origin: process.env.CLIENT_URL ? [process.env.CLIENT_URL, 'http://localhost:5173'] : ['http://localhost:5173'],
     methods: ['GET', 'POST', 'PUT', 'DELETE'],
     credentials: true,
   },

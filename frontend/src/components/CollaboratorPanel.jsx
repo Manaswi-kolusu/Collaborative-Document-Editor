@@ -1,15 +1,14 @@
 import React, { useState } from 'react';
-import { Users, Wifi, UserPlus, ShieldAlert, Loader2, Check, Link2, Copy } from 'lucide-react';
+import { Users, Wifi, UserPlus, ShieldAlert, Check, Copy, Crown, Circle, X } from 'lucide-react';
 import { useAuthStore } from '../store/authStore';
-import API from '../services/api';
 
-const COLLABORATOR_COLORS = [
-  'bg-blue-500',
-  'bg-emerald-500',
-  'bg-purple-500',
-  'bg-rose-500',
-  'bg-amber-500',
-  'bg-cyan-500',
+const AVATAR_GRADIENTS = [
+  'from-violet-400 to-indigo-600',
+  'from-emerald-400 to-teal-600',
+  'from-rose-400 to-pink-600',
+  'from-amber-400 to-orange-600',
+  'from-sky-400 to-blue-600',
+  'from-fuchsia-400 to-purple-600',
 ];
 
 const CollaboratorPanel = ({ 
@@ -22,150 +21,148 @@ const CollaboratorPanel = ({
   const [success, setSuccess] = useState(false);
 
   const isOwner = docDetails?.owner?._id === currentUser?._id;
+  const inviteLink = `${window.location.origin}/invite/${documentId}/${docDetails?.inviteToken}`;
+
+  const handleCopy = () => {
+    navigator.clipboard.writeText(inviteLink);
+    setSuccess(true);
+    setTimeout(() => setSuccess(false), 2500);
+  };
 
   return (
-    <div className="w-80 bg-white border-l border-[#dadce0] p-5 flex flex-col h-full shadow-sm select-none overflow-y-auto">
+    <div className="w-[320px] bg-[#16161e] border-l border-white/8 flex flex-col h-full select-none overflow-hidden">
       
-      {/* 1. SHARE SECTION */}
-      <div className="mb-6 pb-6 border-b border-[#dadce0]">
-        <div className="flex items-center gap-2 mb-3">
-          <UserPlus className="h-5 w-5 text-blue-600" />
-          <h3 className="font-bold text-sm text-gray-800">Share with collaborators</h3>
-        </div>
-
-        {isOwner ? (
-          <div className="space-y-3">
-            <p className="text-[12px] text-gray-500 leading-relaxed">
-              Anyone with this link can view and edit the document.
-            </p>
-            <div className="flex items-center gap-2 bg-gray-50 border border-gray-200 rounded-md p-1 pl-3 shadow-sm transition-colors hover:border-gray-300">
-              <div className="flex-1 overflow-hidden">
-                <p 
-                  className="text-[11px] text-gray-500 truncate select-all font-mono" 
-                  title={`${window.location.origin}/invite/${documentId}/${docDetails?.inviteToken}`}
-                >
-                  {`${window.location.origin}/invite/${documentId}/${docDetails?.inviteToken}`}
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={() => {
-                  const inviteLink = `${window.location.origin}/invite/${documentId}/${docDetails?.inviteToken}`;
-                  navigator.clipboard.writeText(inviteLink);
-                  setSuccess(true);
-                  setTimeout(() => setSuccess(false), 3000);
-                }}
-                className={`px-3 py-1.5 rounded text-[11px] font-semibold flex items-center gap-1.5 transition-all duration-200 cursor-pointer ${
-                  success 
-                    ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-                    : 'bg-white text-gray-700 border border-gray-200 shadow-sm hover:bg-gray-50 hover:text-blue-600'
-                }`}
-              >
-                {success ? (
-                  <>
-                    <Check className="h-3.5 w-3.5" /> Copied
-                  </>
-                ) : (
-                  <>
-                    <Copy className="h-3.5 w-3.5" /> Copy
-                  </>
-                )}
-              </button>
-            </div>
-          </div>
-        ) : (
-          <div className="flex items-start gap-2 bg-gray-50 border border-gray-200 rounded p-2.5">
-            <ShieldAlert className="h-4.5 w-4.5 text-amber-500 flex-shrink-0 mt-0.5" />
-            <p className="text-[11px] text-gray-500">
-              Only the document owner (<strong>{docDetails?.owner?.name || 'Owner'}</strong>) can share or manage permissions.
-            </p>
-          </div>
-        )}
+      {/* Header */}
+      <div className="px-5 pt-4 pb-3 border-b border-white/8">
+        <h3 className="text-sm font-bold text-white">People</h3>
+        <p className="text-[11px] text-slate-500 mt-0.5">{collaborators.length} online · {1 + (docDetails?.collaborators?.length || 0)} members</p>
       </div>
 
-      {/* 2. PRESENCE (ONLINE NOW) */}
-      <div className="mb-6 flex-1 flex flex-col min-h-0">
-        <div className="flex items-center gap-2 mb-3">
-          <Users className="h-5 w-5 text-blue-650" />
-          <h3 className="font-bold text-sm text-gray-800">Active Collaborators</h3>
-          <span className="ml-auto text-xs bg-blue-50 text-blue-600 px-2 py-0.5 rounded-full font-bold">
-            {collaborators.length}
-          </span>
+      <div className="flex-1 overflow-y-auto px-4 py-4 space-y-5">
+
+        {/* Share Section */}
+        <div>
+          <div className="flex items-center gap-2 mb-2.5">
+            <UserPlus className="h-3.5 w-3.5 text-violet-400" />
+            <span className="text-[11px] font-semibold text-slate-300 uppercase tracking-wider">Invite</span>
+          </div>
+
+          {isOwner ? (
+            <div className="space-y-2">
+              <p className="text-[11px] text-slate-500 leading-relaxed">Share this link to give edit access.</p>
+              <div className="flex items-center gap-2">
+                <div className="flex-1 bg-white/5 border border-white/8 rounded-lg px-3 py-2 overflow-hidden">
+                  <p className="text-[10px] text-slate-400 truncate font-mono select-all" title={inviteLink}>
+                    {inviteLink}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleCopy}
+                  className={`shrink-0 px-3 py-2 rounded-lg text-[11px] font-semibold flex items-center gap-1.5 transition-all cursor-pointer ${
+                    success
+                      ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/20'
+                      : 'bg-violet-600/15 text-violet-300 border border-violet-500/20 hover:bg-violet-600/25'
+                  }`}
+                >
+                  {success ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
+                  {success ? 'Done' : 'Copy'}
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div className="flex items-start gap-2.5 bg-amber-500/10 border border-amber-500/15 rounded-lg p-3">
+              <ShieldAlert className="h-4 w-4 text-amber-400 flex-shrink-0 mt-0.5" />
+              <p className="text-[11px] text-amber-200/80 leading-relaxed">
+                Only <strong className="text-amber-300">{docDetails?.owner?.name || 'the owner'}</strong> can share.
+              </p>
+            </div>
+          )}
         </div>
 
-        <div className="flex-1 overflow-y-auto space-y-2.5 min-h-[120px] max-h-[220px] pr-1">
-          {collaborators.length === 0 ? (
-            <p className="text-xs text-gray-400 italic">No active collaborators online.</p>
-          ) : (
-            collaborators.map((collab, idx) => {
-              const colorClass = COLLABORATOR_COLORS[idx % COLLABORATOR_COLORS.length];
-              return (
-                <div
-                  key={collab.email}
-                  className="flex items-center justify-between p-2 rounded bg-gray-50 border border-gray-150"
-                >
-                  <div className="flex items-center gap-2 truncate">
-                    <div className={`h-7 w-7 rounded-full ${colorClass} flex items-center justify-center text-white font-bold text-[11px] flex-shrink-0`}>
-                      {collab?.name?.charAt(0)?.toUpperCase() || '?'}
+        {/* Online Now */}
+        <div>
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center gap-2">
+              <Circle className="h-2 w-2 text-emerald-400 fill-emerald-400 animate-pulse" />
+              <span className="text-[11px] font-semibold text-slate-300 uppercase tracking-wider">Online</span>
+            </div>
+            <span className="text-[10px] text-violet-400 font-bold bg-violet-500/15 px-2 py-0.5 rounded-full">
+              {collaborators.length}
+            </span>
+          </div>
+
+          <div className="space-y-1">
+            {collaborators.length === 0 ? (
+              <div className="text-center py-6">
+                <Users className="h-5 w-5 text-slate-700 mx-auto mb-2" />
+                <p className="text-[11px] text-slate-600">No one else is here yet.</p>
+              </div>
+            ) : (
+              collaborators.map((collab, idx) => {
+                const gradient = AVATAR_GRADIENTS[idx % AVATAR_GRADIENTS.length];
+                return (
+                  <div key={collab.email} className="flex items-center gap-3 p-2 rounded-xl hover:bg-white/5 transition-colors">
+                    <div className="relative shrink-0">
+                      <div className={`h-8 w-8 rounded-full bg-gradient-to-br ${gradient} flex items-center justify-center text-white font-bold text-[11px] shadow-sm`}>
+                        {collab?.name?.charAt(0)?.toUpperCase() || '?'}
+                      </div>
+                      <div className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 bg-emerald-400 rounded-full border-2 border-[#16161e]" />
                     </div>
-                    <div className="truncate">
-                      <h4 className="text-xs font-semibold text-gray-700 truncate">{collab.name}</h4>
-                      <p className="text-[10px] text-gray-400 truncate">{collab.email}</p>
+                    <div className="flex-1 min-w-0">
+                      <h4 className="text-[12px] font-semibold text-white truncate">{collab.name}</h4>
+                      <p className="text-[10px] text-slate-500 truncate">{collab.email}</p>
                     </div>
-                  </div>
-                  <div className="flex-shrink-0 ml-2">
-                    {collab.isTyping ? (
-                      <span className="flex h-2.5 w-2.5 relative">
-                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
-                        <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-blue-600"></span>
-                      </span>
-                    ) : (
-                      <Wifi className="h-3.5 w-3.5 text-emerald-600" />
+                    {collab.isTyping && (
+                      <div className="flex gap-0.5 items-center px-2 py-1 bg-violet-500/15 rounded-full shrink-0">
+                        <span className="w-1 h-1 rounded-full bg-violet-400 animate-bounce [animation-delay:0ms]"></span>
+                        <span className="w-1 h-1 rounded-full bg-violet-400 animate-bounce [animation-delay:150ms]"></span>
+                        <span className="w-1 h-1 rounded-full bg-violet-400 animate-bounce [animation-delay:300ms]"></span>
+                      </div>
                     )}
                   </div>
+                );
+              })
+            )}
+          </div>
+        </div>
+
+        {/* Access */}
+        <div>
+          <div className="flex items-center gap-2 mb-3">
+            <Crown className="h-3 w-3 text-amber-400" />
+            <span className="text-[11px] font-semibold text-slate-300 uppercase tracking-wider">Access</span>
+          </div>
+
+          <div className="space-y-1">
+            {docDetails?.owner && (
+              <div className="flex items-center gap-3 p-2 rounded-xl">
+                <div className="h-7 w-7 rounded-full bg-gradient-to-br from-amber-400 to-orange-500 flex items-center justify-center text-white font-bold text-[10px] shrink-0">
+                  {docDetails.owner.name?.charAt(0)?.toUpperCase() || '?'}
                 </div>
-              );
-            })
-          )}
+                <div className="flex-1 min-w-0">
+                  <p className="text-[12px] font-medium text-white truncate">{docDetails.owner.name}</p>
+                  <p className="text-[10px] text-slate-500 truncate">{docDetails.owner.email}</p>
+                </div>
+                <span className="text-[9px] text-amber-400 font-bold bg-amber-500/15 px-2 py-0.5 rounded-full shrink-0">Owner</span>
+              </div>
+            )}
+
+            {docDetails?.collaborators?.map((collab, idx) => (
+              <div key={collab.email} className="flex items-center gap-3 p-2 rounded-xl">
+                <div className={`h-7 w-7 rounded-full bg-gradient-to-br ${AVATAR_GRADIENTS[(idx + 1) % AVATAR_GRADIENTS.length]} flex items-center justify-center text-white font-bold text-[10px] shrink-0`}>
+                  {collab?.name?.charAt(0)?.toUpperCase() || '?'}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-[12px] font-medium text-white truncate">{collab.name}</p>
+                  <p className="text-[10px] text-slate-500 truncate">{collab.email}</p>
+                </div>
+                <span className="text-[9px] text-slate-400 font-medium bg-white/5 px-2 py-0.5 rounded-full shrink-0">Editor</span>
+              </div>
+            ))}
+          </div>
         </div>
       </div>
-
-      {/* 3. ACCESS LIST */}
-      <div className="border-t border-[#dadce0] pt-4">
-        <h4 className="font-bold text-xs text-gray-500 uppercase tracking-wider mb-2.5">
-          Users with access ({1 + (docDetails?.collaborators?.length || 0)})
-        </h4>
-        <div className="space-y-2 max-h-[200px] overflow-y-auto pr-1">
-          {/* Owner details */}
-          {docDetails?.owner && (
-            <div className="flex items-center gap-2">
-              <div className="h-6 w-6 rounded-full bg-gray-200 text-gray-700 font-bold text-[10px] flex items-center justify-center flex-shrink-0">
-                {docDetails?.owner?.name?.charAt(0)?.toUpperCase() || '?'}
-              </div>
-              <div className="truncate flex-grow">
-                <p className="text-xs font-medium text-gray-800 truncate">
-                  {docDetails.owner.name} <span className="text-[10px] text-gray-400 font-normal">(Owner)</span>
-                </p>
-                <p className="text-[9px] text-gray-400 truncate">{docDetails.owner.email}</p>
-              </div>
-            </div>
-          )}
-
-          {/* Invited Collaborators list */}
-          {docDetails?.collaborators?.map((collab) => (
-            <div key={collab.email} className="flex items-center gap-2">
-              <div className="h-6 w-6 rounded-full bg-gray-100 text-gray-600 font-medium text-[10px] flex items-center justify-center flex-shrink-0">
-                {collab?.name?.charAt(0)?.toUpperCase() || '?'}
-              </div>
-              <div className="truncate flex-grow">
-                <p className="text-xs text-gray-700 truncate">{collab.name}</p>
-                <p className="text-[9px] text-gray-400 truncate">{collab.email}</p>
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
-
     </div>
   );
 };

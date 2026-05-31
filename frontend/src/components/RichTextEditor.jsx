@@ -6,12 +6,14 @@ import { IndexeddbPersistence } from 'y-indexeddb';
 import { createPortal } from 'react-dom';
 import { 
   Bold, Italic, Underline, Strikethrough, 
-  List, ListOrdered, Link2, Eraser, 
-  Heading1, Heading2, Heading3, Type 
+  List, ListOrdered, Link2, Quote, 
+  Heading1, Heading2, Heading3, Type,
+  AlignLeft, AlignCenter, AlignRight, Minus,
+  ChevronDown,
 } from 'lucide-react';
 
 const getCursorColor = (userId) => {
-  const colors = ['#f56565', '#ed8936', '#ecc94b', '#48bb78', '#38b2ac', '#4299e1', '#667eea', '#9f7aea', '#ed64a6'];
+  const colors = ['#ef4444', '#f97316', '#f59e0b', '#10b981', '#14b8a6', '#3b82f6', '#6366f1', '#8b5cf6', '#d946ef'];
   if (!userId) return colors[0];
   const hash = String(userId).split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
   return colors[hash % colors.length];
@@ -36,19 +38,13 @@ const CustomToolbar = ({ quill, activeFormats }) => {
     quill.focus();
   };
 
-  const handleClearFormat = () => {
-    const range = quill.getSelection();
-    if (range) {
-      quill.removeFormat(range.index, range.length);
-    } else {
-      quill.removeFormat(0, quill.getLength());
-    }
+  const handleBlockquote = () => {
+    const current = quill.getFormat()['blockquote'];
+    quill.format('blockquote', !current);
     quill.focus();
   };
 
-  const ToolbarButton = ({ icon: Icon, format, value = true, onClick }) => {
-    // If the format is active, apply the active styling
-    // Handle array formats (like header levels) properly
+  const ToolbarButton = ({ icon: Icon, format, value = true, onClick, title, label }) => {
     let isActive = false;
     if (value === true) {
       isActive = !!activeFormats[format];
@@ -61,40 +57,103 @@ const CustomToolbar = ({ quill, activeFormats }) => {
     return (
       <button
         type="button"
+        title={title}
         onMouseDown={(e) => {
-          e.preventDefault(); // Prevent losing focus from the editor
+          e.preventDefault();
           onClick ? onClick() : toggleFormat(format, value);
         }}
-        className={`w-8 h-8 rounded flex items-center justify-center transition-colors cursor-pointer \${
-          isActive ? 'bg-blue-100 text-blue-900' : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'
+        className={`h-8 min-w-[32px] px-1.5 rounded-lg flex items-center justify-center gap-1 transition-all cursor-pointer text-xs font-medium ${
+          isActive 
+            ? 'bg-violet-600/20 text-violet-300 shadow-sm ring-1 ring-violet-500/30' 
+            : 'text-slate-400 hover:bg-white/5 hover:text-slate-200'
         }`}
       >
-        <Icon className="w-[18px] h-[18px]" />
+        <Icon className="w-[15px] h-[15px]" />
+        {label && <span className="text-[11px]">{label}</span>}
       </button>
     );
   };
 
+  const Divider = () => <div className="w-px h-5 bg-white/8 mx-1" />;
+
+  // Get current heading label
+  const getHeadingLabel = () => {
+    const h = activeFormats.header;
+    if (h === 1) return 'Heading 1';
+    if (h === 2) return 'Heading 2';
+    if (h === 3) return 'Heading 3';
+    return 'Normal';
+  };
+
+  const [showHeadingMenu, setShowHeadingMenu] = useState(false);
+
   return (
-    <div className="bg-white border-b border-gray-200 flex items-center justify-center gap-1 py-2 px-4 shadow-sm z-20 shrink-0 select-none">
-      <div className="flex items-center gap-1 border-r border-gray-200 pr-2 mr-1">
-        <ToolbarButton icon={Type} format="header" value={false} />
-        <ToolbarButton icon={Heading1} format="header" value={1} />
-        <ToolbarButton icon={Heading2} format="header" value={2} />
-        <ToolbarButton icon={Heading3} format="header" value={3} />
+    <div className="bg-[#16161e] border-b border-white/8 flex items-center justify-center gap-1 py-2 px-4 z-20 shrink-0 select-none">
+      
+      {/* Heading Dropdown */}
+      <div className="relative">
+        <button
+          type="button"
+          onMouseDown={(e) => { e.preventDefault(); setShowHeadingMenu(!showHeadingMenu); }}
+          className="h-8 px-2.5 rounded-lg flex items-center gap-1.5 transition-colors cursor-pointer text-slate-400 hover:bg-white/5 hover:text-slate-200 text-[12px] font-medium min-w-[100px]"
+        >
+          <Type className="w-[14px] h-[14px]" />
+          <span>{getHeadingLabel()}</span>
+          <ChevronDown className="w-3 h-3 ml-auto" />
+        </button>
+        {showHeadingMenu && (
+          <>
+            <div className="fixed inset-0 z-40" onClick={() => setShowHeadingMenu(false)} />
+            <div className="absolute top-full left-0 mt-1 w-40 bg-[#1e1e2e] border border-white/10 rounded-xl shadow-[0_8px_32px_rgba(0,0,0,0.4)] py-1.5 z-50">
+              {[
+                { label: 'Normal text', value: false },
+                { label: 'Heading 1', value: 1 },
+                { label: 'Heading 2', value: 2 },
+                { label: 'Heading 3', value: 3 },
+              ].map((opt) => (
+                <button
+                  key={String(opt.value)}
+                  type="button"
+                  onMouseDown={(e) => {
+                    e.preventDefault();
+                    toggleFormat('header', opt.value);
+                    setShowHeadingMenu(false);
+                  }}
+                  className={`w-full text-left px-3 py-2 text-[12px] transition-colors cursor-pointer ${
+                    (opt.value === false && !activeFormats.header) || activeFormats.header === opt.value
+                      ? 'bg-violet-600/15 text-violet-300'
+                      : 'text-slate-300 hover:bg-white/5'
+                  } ${opt.value === 1 ? 'text-lg font-bold' : opt.value === 2 ? 'text-base font-semibold' : opt.value === 3 ? 'text-sm font-medium' : 'text-[12px]'}`}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+          </>
+        )}
       </div>
-      <div className="flex items-center gap-1 border-r border-gray-200 pr-2 mr-1">
-        <ToolbarButton icon={Bold} format="bold" />
-        <ToolbarButton icon={Italic} format="italic" />
-        <ToolbarButton icon={Underline} format="underline" />
-        <ToolbarButton icon={Strikethrough} format="strike" />
+
+      <Divider />
+
+      <div className="flex items-center gap-0.5">
+        <ToolbarButton icon={Bold} format="bold" title="Bold (⌘B)" />
+        <ToolbarButton icon={Italic} format="italic" title="Italic (⌘I)" />
+        <ToolbarButton icon={Underline} format="underline" title="Underline (⌘U)" />
+        <ToolbarButton icon={Strikethrough} format="strike" title="Strikethrough" />
       </div>
-      <div className="flex items-center gap-1 border-r border-gray-200 pr-2 mr-1">
-        <ToolbarButton icon={ListOrdered} format="list" value="ordered" />
-        <ToolbarButton icon={List} format="list" value="bullet" />
+
+      <Divider />
+
+      <div className="flex items-center gap-0.5">
+        <ToolbarButton icon={ListOrdered} format="list" value="ordered" title="Numbered list" />
+        <ToolbarButton icon={List} format="list" value="bullet" title="Bulleted list" />
       </div>
-      <div className="flex items-center gap-1">
-        <ToolbarButton icon={Link2} format="link" onClick={handleLink} />
-        <ToolbarButton icon={Eraser} format="clean" onClick={handleClearFormat} />
+
+      <Divider />
+
+      <div className="flex items-center gap-0.5">
+        <ToolbarButton icon={Link2} format="link" onClick={handleLink} title="Insert link (⌘K)" />
+        <ToolbarButton icon={Quote} format="blockquote" onClick={handleBlockquote} title="Block quote" />
       </div>
     </div>
   );
@@ -109,8 +168,6 @@ const RichTextEditor = ({ documentId, socket, emit }) => {
   const [editorLoaded, setEditorLoaded] = useState(false);
   const [cursorContainer, setCursorContainer] = useState(null);
   const [activeFormats, setActiveFormats] = useState({});
-
-  // cursors: { [socketId]: { range, name, color } }
   const [remoteCursors, setRemoteCursors] = useState({});
 
   useEffect(() => {
@@ -120,28 +177,21 @@ const RichTextEditor = ({ documentId, socket, emit }) => {
     wrapper.innerHTML = '<div id="editor-elem"></div>';
     const editor = wrapper.firstChild;
 
-    // 1. Initialize Quill Editor
-    // Disable Quill's built-in toolbar, we will provide our own React toolbar
     const quill = new Quill(editor, {
-      modules: {
-        toolbar: false,
-      },
-      placeholder: 'Start writing your document here...',
+      modules: { toolbar: false },
+      placeholder: 'Start writing your document...',
     });
     quillRef.current = quill;
     window.__quill = quill;
 
-    // 2. Add cursor container for React Portal
     const cContainer = quill.addContainer('ql-remote-cursors');
     cContainer.className = 'absolute inset-0 pointer-events-none z-10';
     setCursorContainer(cContainer);
 
-    // 3. Initialize Y.js document
     const ydoc = new Y.Doc();
     ydocRef.current = ydoc;
     const ytext = ydoc.getText('quill-content');
 
-    // 4. Initialize IndexedDB Persistence for offline support
     const provider = new IndexeddbPersistence(documentId, ydoc);
     providerRef.current = provider;
 
@@ -149,11 +199,9 @@ const RichTextEditor = ({ documentId, socket, emit }) => {
       console.log('IndexedDB loaded local state');
     });
 
-    // 5. Bind Y.js state with Quill
     const binding = new QuillBinding(ytext, quill);
     bindingRef.current = binding;
 
-    // Format tracking for Custom Toolbar
     const handleEditorChange = () => {
       setActiveFormats(quill.getFormat() || {});
     };
@@ -172,18 +220,14 @@ const RichTextEditor = ({ documentId, socket, emit }) => {
     };
   }, [documentId]);
 
-  // Handle outgoing updates from Yjs doc to socket.io
   useEffect(() => {
     if (!editorLoaded || !ydocRef.current || !socket) return;
 
     const handleYjsUpdate = (update, origin) => {
-      // Don't echo back updates received from socket or indexeddb
       if (origin !== socket && origin !== providerRef.current) {
-        // Broadcast the small live delta to other users
         const base64Update = btoa(String.fromCharCode(...update));
         emit('document:update', { documentId, update: base64Update });
         
-        // Emit the FULL document state for database auto-saving
         const fullState = Y.encodeStateAsUpdate(ydocRef.current);
         const fullStateBase64 = btoa(String.fromCharCode(...fullState));
         emit('document:autosave', { documentId, content: fullStateBase64 });
@@ -199,7 +243,6 @@ const RichTextEditor = ({ documentId, socket, emit }) => {
     };
   }, [editorLoaded, socket, documentId]);
 
-  // Handle incoming updates from socket.io
   useEffect(() => {
     if (!socket) return;
 
@@ -261,7 +304,6 @@ const RichTextEditor = ({ documentId, socket, emit }) => {
     };
   }, [socket]);
 
-  // Cursor & typing tracking outgoing
   useEffect(() => {
     if (!quillRef.current || !socket) return;
 
@@ -307,7 +349,6 @@ const RichTextEditor = ({ documentId, socket, emit }) => {
     };
   }, [editorLoaded]);
 
-  // Render remote cursors inside the quill container using React Portal
   const renderRemoteCursors = () => {
     if (!quillRef.current || !cursorContainer) return null;
     
@@ -329,14 +370,12 @@ const RichTextEditor = ({ documentId, socket, emit }) => {
               height: `${bounds.height}px`,
             }}
           >
-            {/* Cursor line */}
             <div 
               className="absolute w-[2px] h-full"
               style={{ backgroundColor: color }}
             />
-            {/* Cursor label */}
             <div 
-              className="absolute top-[-22px] left-[-2px] px-1.5 py-0.5 text-[10px] font-semibold text-white whitespace-nowrap rounded shadow-sm opacity-90"
+              className="absolute top-[-24px] left-[-2px] px-2 py-1 text-[11px] font-bold text-white whitespace-nowrap rounded-t-lg rounded-br-lg shadow-md z-50"
               style={{ backgroundColor: color }}
             >
               {name}
@@ -352,31 +391,31 @@ const RichTextEditor = ({ documentId, socket, emit }) => {
   };
 
   return (
-    <div className="flex-1 bg-gray-50 flex flex-col overflow-hidden relative">
+    <div className="flex-1 bg-[#0f0f14] flex flex-col overflow-hidden relative">
       <div className="overflow-x-auto scrollbar-hide">
         <CustomToolbar quill={quillRef.current} activeFormats={activeFormats} />
       </div>
       
       <div 
         ref={editorContainerRef} 
-        className="flex-1 flex flex-col overflow-hidden text-gray-900 
-          [&_.ql-container]:border-none [&_.ql-container]:bg-gray-50 [&_.ql-container]:flex-1 [&_.ql-container]:overflow-y-auto [&_.ql-container]:relative
+        className="flex-1 flex flex-col overflow-hidden
+          [&_.ql-container]:border-none [&_.ql-container]:bg-transparent [&_.ql-container]:flex-1 [&_.ql-container]:overflow-y-auto [&_.ql-container]:relative
           
-          [&_.ql-editor]:relative [&_.ql-editor]:bg-white [&_.ql-editor]:text-gray-800 [&_.ql-editor]:w-full [&_.ql-editor]:max-w-[816px] [&_.ql-editor]:min-h-[1056px] [&_.ql-editor]:my-6 [&_.ql-editor]:mx-auto [&_.ql-editor]:p-6 sm:[&_.ql-editor]:p-[96px] [&_.ql-editor]:shadow-[0_1px_3px_0_rgba(60,64,67,0.15),0_4px_8px_3px_rgba(60,64,67,0.1)] [&_.ql-editor]:border [&_.ql-editor]:border-gray-200 [&_.ql-editor]:outline-none [&_.ql-editor]:font-sans [&_.ql-editor]:text-[15px] [&_.ql-editor]:leading-[1.6] [&_.ql-editor]:cursor-text [&_.ql-editor]:whitespace-pre-wrap
+          [&_.ql-editor]:relative [&_.ql-editor]:bg-white [&_.ql-editor]:text-[#202124] [&_.ql-editor]:w-full [&_.ql-editor]:max-w-[816px] [&_.ql-editor]:min-h-[1056px] [&_.ql-editor]:my-8 [&_.ql-editor]:mx-auto [&_.ql-editor]:p-8 sm:[&_.ql-editor]:p-[96px] [&_.ql-editor]:shadow-[0_0_0_1px_rgba(255,255,255,0.05),0_4px_24px_rgba(0,0,0,0.3)] [&_.ql-editor]:rounded-lg [&_.ql-editor]:outline-none [&_.ql-editor]:font-sans [&_.ql-editor]:text-[15px] [&_.ql-editor]:leading-[1.75] [&_.ql-editor]:cursor-text [&_.ql-editor]:whitespace-pre-wrap
           
-          [&_.ql-editor.ql-blank::before]:absolute [&_.ql-editor.ql-blank::before]:left-6 sm:[&_.ql-editor.ql-blank::before]:left-[96px] [&_.ql-editor.ql-blank::before]:top-6 sm:[&_.ql-editor.ql-blank::before]:top-[96px] [&_.ql-editor.ql-blank::before]:text-gray-400 [&_.ql-editor.ql-blank::before]:not-italic [&_.ql-editor.ql-blank::before]:pointer-events-none [&_.ql-editor.ql-blank::before]:content-[attr(data-placeholder)]
+          [&_.ql-editor.ql-blank::before]:absolute [&_.ql-editor.ql-blank::before]:left-8 sm:[&_.ql-editor.ql-blank::before]:left-[96px] [&_.ql-editor.ql-blank::before]:top-8 sm:[&_.ql-editor.ql-blank::before]:top-[96px] [&_.ql-editor.ql-blank::before]:text-[#9aa0a6] [&_.ql-editor.ql-blank::before]:not-italic [&_.ql-editor.ql-blank::before]:pointer-events-none [&_.ql-editor.ql-blank::before]:content-[attr(data-placeholder)]
           
-          focus:[&_.ql-editor]:border-gray-300 focus:[&_.ql-editor]:shadow-[0_1px_3px_0_rgba(60,64,67,0.15),0_4px_12px_3px_rgba(60,64,67,0.12)]
+          [&_.ql-editor_h1]:text-3xl [&_.ql-editor_h1]:font-bold [&_.ql-editor_h1]:text-[#202124] [&_.ql-editor_h1]:mt-6 [&_.ql-editor_h1]:mb-4
+          [&_.ql-editor_h2]:text-2xl [&_.ql-editor_h2]:font-bold [&_.ql-editor_h2]:text-[#202124] [&_.ql-editor_h2]:mt-5 [&_.ql-editor_h2]:mb-3
+          [&_.ql-editor_h3]:text-xl [&_.ql-editor_h3]:font-semibold [&_.ql-editor_h3]:text-[#202124] [&_.ql-editor_h3]:mt-4 [&_.ql-editor_h3]:mb-2
           
-          [&_.ql-editor_h1]:text-4xl [&_.ql-editor_h1]:font-bold [&_.ql-editor_h1]:mt-6 [&_.ql-editor_h1]:mb-4
-          [&_.ql-editor_h2]:text-3xl [&_.ql-editor_h2]:font-bold [&_.ql-editor_h2]:mt-5 [&_.ql-editor_h2]:mb-3
-          [&_.ql-editor_h3]:text-2xl [&_.ql-editor_h3]:font-bold [&_.ql-editor_h3]:mt-4 [&_.ql-editor_h3]:mb-2
+          [&_.ql-editor_ol]:list-decimal [&_.ql-editor_ol]:pl-6 [&_.ql-editor_ol]:my-3
+          [&_.ql-editor_ul]:list-disc [&_.ql-editor_ul]:pl-6 [&_.ql-editor_ul]:my-3
+          [&_.ql-editor_li]:pl-2 [&_.ql-editor_li]:mb-1.5
           
-          [&_.ql-editor_ol]:list-decimal [&_.ql-editor_ol]:pl-5 [&_.ql-editor_ol]:my-2
-          [&_.ql-editor_ul]:list-disc [&_.ql-editor_ul]:pl-5 [&_.ql-editor_ul]:my-2
-          [&_.ql-editor_li]:pl-1 [&_.ql-editor_li]:mb-1
+          [&_.ql-editor_blockquote]:border-l-4 [&_.ql-editor_blockquote]:border-violet-400 [&_.ql-editor_blockquote]:pl-4 [&_.ql-editor_blockquote]:my-4 [&_.ql-editor_blockquote]:text-[#5f6368] [&_.ql-editor_blockquote]:italic
           
-          [&_.ql-editor_a]:text-blue-600 [&_.ql-editor_a]:underline
+          [&_.ql-editor_a]:text-violet-600 [&_.ql-editor_a]:underline hover:[&_.ql-editor_a]:text-violet-800
         " 
       />
       {renderRemoteCursors()}
