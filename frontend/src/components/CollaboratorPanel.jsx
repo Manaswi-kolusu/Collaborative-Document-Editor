@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
-import { Users, Wifi, UserPlus, ShieldAlert, Check, Copy, Crown, Circle, X } from 'lucide-react';
+import { Users, UserPlus, ShieldAlert, Check, Copy, Crown, Circle, Mail, Send, X } from 'lucide-react';
 import { useAuthStore } from '../store/authStore';
+import API from '../services/api';
 
 const AVATAR_GRADIENTS = [
   'from-violet-400 to-indigo-600',
@@ -18,15 +19,41 @@ const CollaboratorPanel = ({
   setDocDetails 
 }) => {
   const { user: currentUser } = useAuthStore();
-  const [success, setSuccess] = useState(false);
+  const [linkCopied, setLinkCopied] = useState(false);
+  const [shareEmail, setShareEmail] = useState('');
+  const [shareLoading, setShareLoading] = useState(false);
+  const [shareError, setShareError] = useState(null);
+  const [shareSuccess, setShareSuccess] = useState(false);
 
-  const isOwner = docDetails?.owner?._id === currentUser?._id;
-  const inviteLink = `${window.location.origin}/invite/${documentId}/${docDetails?.inviteToken}`;
+  // Use toString() to ensure proper comparison of MongoDB ObjectIds
+  const isOwner = docDetails?.owner?._id?.toString() === currentUser?._id?.toString();
+  const inviteLink = docDetails?.inviteToken 
+    ? `${window.location.origin}/invite/${documentId}/${docDetails.inviteToken}`
+    : null;
 
-  const handleCopy = () => {
+  const handleCopyLink = () => {
+    if (!inviteLink) return;
     navigator.clipboard.writeText(inviteLink);
-    setSuccess(true);
-    setTimeout(() => setSuccess(false), 2500);
+    setLinkCopied(true);
+    setTimeout(() => setLinkCopied(false), 2500);
+  };
+
+  const handleShareByEmail = async (e) => {
+    e.preventDefault();
+    if (!shareEmail.trim()) return;
+    setShareLoading(true);
+    setShareError(null);
+    try {
+      const { data } = await API.post(`/documents/${documentId}/share`, { email: shareEmail.trim() });
+      setDocDetails(data);
+      setShareEmail('');
+      setShareSuccess(true);
+      setTimeout(() => setShareSuccess(false), 2500);
+    } catch (err) {
+      setShareError(err.response?.data?.message || 'Failed to share');
+    } finally {
+      setShareLoading(false);
+    }
   };
 
   return (
@@ -48,33 +75,72 @@ const CollaboratorPanel = ({
           </div>
 
           {isOwner ? (
-            <div className="space-y-2">
-              <p className="text-[11px] text-slate-500 leading-relaxed">Share this link to give edit access.</p>
-              <div className="flex items-center gap-2">
-                <div className="flex-1 bg-white/5 border border-white/8 rounded-lg px-3 py-2 overflow-hidden">
-                  <p className="text-[10px] text-slate-400 truncate font-mono select-all" title={inviteLink}>
-                    {inviteLink}
+            <div className="space-y-3">
+              {/* Share by Email */}
+              <div>
+                <p className="text-[11px] text-slate-500 mb-2">Add by email address</p>
+                <form onSubmit={handleShareByEmail} className="flex items-center gap-2">
+                  <div className="flex-1 relative">
+                    <Mail className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3 w-3 text-slate-600" />
+                    <input
+                      type="email"
+                      placeholder="user@example.com"
+                      value={shareEmail}
+                      onChange={(e) => { setShareEmail(e.target.value); setShareError(null); }}
+                      className="w-full bg-white/5 border border-white/8 rounded-lg pl-8 pr-3 py-2 text-[11px] text-white focus:outline-none focus:border-violet-500/30 transition-all placeholder:text-slate-600"
+                    />
+                  </div>
+                  <button
+                    type="submit"
+                    disabled={shareLoading || !shareEmail.trim()}
+                    className="shrink-0 p-2 rounded-lg bg-violet-600/15 text-violet-300 border border-violet-500/20 hover:bg-violet-600/25 disabled:opacity-40 transition-all cursor-pointer"
+                  >
+                    {shareSuccess ? <Check className="h-3.5 w-3.5 text-emerald-400" /> : <Send className="h-3.5 w-3.5" />}
+                  </button>
+                </form>
+                {shareError && (
+                  <p className="text-[10px] text-red-400 mt-1.5 flex items-center gap-1">
+                    <X className="h-3 w-3" /> {shareError}
                   </p>
-                </div>
-                <button
-                  type="button"
-                  onClick={handleCopy}
-                  className={`shrink-0 px-3 py-2 rounded-lg text-[11px] font-semibold flex items-center gap-1.5 transition-all cursor-pointer ${
-                    success
-                      ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/20'
-                      : 'bg-violet-600/15 text-violet-300 border border-violet-500/20 hover:bg-violet-600/25'
-                  }`}
-                >
-                  {success ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
-                  {success ? 'Done' : 'Copy'}
-                </button>
+                )}
+                {shareSuccess && (
+                  <p className="text-[10px] text-emerald-400 mt-1.5 flex items-center gap-1">
+                    <Check className="h-3 w-3" /> Collaborator added!
+                  </p>
+                )}
               </div>
+
+              {/* Invite Link */}
+              {inviteLink && (
+                <div>
+                  <p className="text-[11px] text-slate-500 mb-2">Or share invite link</p>
+                  <div className="flex items-center gap-2">
+                    <div className="flex-1 bg-white/5 border border-white/8 rounded-lg px-3 py-2 overflow-hidden">
+                      <p className="text-[10px] text-slate-400 truncate font-mono select-all" title={inviteLink}>
+                        {inviteLink}
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={handleCopyLink}
+                      className={`shrink-0 px-3 py-2 rounded-lg text-[11px] font-semibold flex items-center gap-1.5 transition-all cursor-pointer ${
+                        linkCopied
+                          ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/20'
+                          : 'bg-violet-600/15 text-violet-300 border border-violet-500/20 hover:bg-violet-600/25'
+                      }`}
+                    >
+                      {linkCopied ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
+                      {linkCopied ? 'Done' : 'Copy'}
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           ) : (
             <div className="flex items-start gap-2.5 bg-amber-500/10 border border-amber-500/15 rounded-lg p-3">
               <ShieldAlert className="h-4 w-4 text-amber-400 flex-shrink-0 mt-0.5" />
               <p className="text-[11px] text-amber-200/80 leading-relaxed">
-                Only <strong className="text-amber-300">{docDetails?.owner?.name || 'the owner'}</strong> can share.
+                Only <strong className="text-amber-300">{docDetails?.owner?.name || 'the owner'}</strong> can share this document.
               </p>
             </div>
           )}
@@ -102,7 +168,7 @@ const CollaboratorPanel = ({
               collaborators.map((collab, idx) => {
                 const gradient = AVATAR_GRADIENTS[idx % AVATAR_GRADIENTS.length];
                 return (
-                  <div key={collab.email} className="flex items-center gap-3 p-2 rounded-xl hover:bg-white/5 transition-colors">
+                  <div key={collab.email || idx} className="flex items-center gap-3 p-2 rounded-xl hover:bg-white/5 transition-colors">
                     <div className="relative shrink-0">
                       <div className={`h-8 w-8 rounded-full bg-gradient-to-br ${gradient} flex items-center justify-center text-white font-bold text-[11px] shadow-sm`}>
                         {collab?.name?.charAt(0)?.toUpperCase() || '?'}
@@ -149,7 +215,7 @@ const CollaboratorPanel = ({
             )}
 
             {docDetails?.collaborators?.map((collab, idx) => (
-              <div key={collab.email} className="flex items-center gap-3 p-2 rounded-xl">
+              <div key={collab._id || collab.email || idx} className="flex items-center gap-3 p-2 rounded-xl">
                 <div className={`h-7 w-7 rounded-full bg-gradient-to-br ${AVATAR_GRADIENTS[(idx + 1) % AVATAR_GRADIENTS.length]} flex items-center justify-center text-white font-bold text-[10px] shrink-0`}>
                   {collab?.name?.charAt(0)?.toUpperCase() || '?'}
                 </div>

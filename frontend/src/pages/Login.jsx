@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { useNavigate, Link, useLocation } from 'react-router-dom';
 import { useAuthStore } from '../store/authStore';
 import { Loader2, FileText, Mail, Lock, ArrowRight } from 'lucide-react';
 
@@ -8,6 +8,8 @@ const Login = () => {
   const [password, setPassword] = useState('');
   const { login, loading, error, clearError } = useAuthStore();
   const navigate = useNavigate();
+  const location = useLocation();
+  const from = location.state?.from || '/dashboard';
 
   useEffect(() => {
     clearError();
@@ -18,7 +20,7 @@ const Login = () => {
     if (!email || !password) return;
     const success = await login(email, password);
     if (success) {
-      navigate('/dashboard');
+      navigate(from, { replace: true });
     }
   };
 
