@@ -49,8 +49,8 @@ const DropdownMenu = ({ children }) => (
 
 const MenuItem = ({ icon: Icon, label, shortcut, onClick, danger, onClose }) => (
   <div
-    onClick={(e) => {
-      e.stopPropagation();
+    onMouseDown={(e) => {
+      e.preventDefault();
       onClick?.();
       onClose?.();
     }}
@@ -354,7 +354,7 @@ const Editor = () => {
         </div>
 
         {/* Secondary Row: Menu bar */}
-        <div className="flex items-center gap-0.5 h-8 text-[12px] text-slate-400 font-medium select-none -ml-1 overflow-x-auto scrollbar-hide" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center gap-0.5 h-8 text-[12px] text-slate-400 font-medium select-none -ml-1" onClick={(e) => e.stopPropagation()}>
           {[
             { label: 'File', key: 'file' },
             { label: 'Edit', key: 'edit' },
@@ -367,7 +367,7 @@ const Editor = () => {
             return (
               <div key={key} className="relative">
                 <span
-                  onClick={(e) => { e.stopPropagation(); toggleMenu(key); }}
+                  onMouseDown={(e) => { e.preventDefault(); toggleMenu(key); }}
                   className={`px-2.5 py-1 rounded-md cursor-pointer transition-colors ${
                     activeMenu === key ? 'bg-white/10 text-white' : 'hover:bg-white/5 hover:text-slate-200'
                   }`}
