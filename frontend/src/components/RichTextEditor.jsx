@@ -6,29 +6,133 @@ import { IndexeddbPersistence } from 'y-indexeddb';
 import { 
   Bold, Italic, Underline, Strikethrough, 
   List, ListOrdered, Link2, Quote, 
-  Heading1, Heading2, Heading3, Type,
-  AlignLeft, AlignCenter, AlignRight, Minus,
-  ChevronDown,
+  Type, ChevronDown,
 } from 'lucide-react';
 
+// ═══════════ CURSOR COLORS ═══════════
 const CURSOR_COLORS = [
-  { bg: '#ef4444', name: 'red' },
-  { bg: '#f97316', name: 'orange' },
-  { bg: '#10b981', name: 'emerald' },
-  { bg: '#3b82f6', name: 'blue' },
-  { bg: '#8b5cf6', name: 'violet' },
-  { bg: '#ec4899', name: 'pink' },
-  { bg: '#14b8a6', name: 'teal' },
-  { bg: '#f59e0b', name: 'amber' },
-  { bg: '#6366f1', name: 'indigo' },
+  '#ef4444', '#f97316', '#10b981', '#3b82f6', 
+  '#8b5cf6', '#ec4899', '#14b8a6', '#f59e0b', '#6366f1',
 ];
 
 const getCursorColor = (userId) => {
-  if (!userId) return CURSOR_COLORS[0].bg;
-  const hash = String(userId).split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
-  return CURSOR_COLORS[hash % CURSOR_COLORS.length].bg;
+  if (!userId) return CURSOR_COLORS[0];
+  const hash = String(userId).split('').reduce((acc, c) => acc + c.charCodeAt(0), 0);
+  return CURSOR_COLORS[hash % CURSOR_COLORS.length];
 };
 
+// ═══════════ CURSOR MANAGER (vanilla DOM — no React) ═══════════
+class CursorManager {
+  constructor(quill) {
+    this.quill = quill;
+    this.cursors = {}; // { socketId: { el, flagEl, range, name, color, timeout } }
+    
+    // Create a cursor layer inside ql-container
+    this.layer = document.createElement('div');
+    this.layer.className = 'ql-cursor-layer';
+    this.layer.style.cssText = 'position:absolute;top:0;left:0;right:0;bottom:0;pointer-events:none;z-index:10;';
+    
+    const qlContainer = quill.container;
+    qlContainer.style.position = 'relative';
+    qlContainer.appendChild(this.layer);
+
+    // Re-render on scroll
+    const scrollEl = quill.scrollingContainer || qlContainer;
+    this._onScroll = () => this.updateAll();
+    scrollEl.addEventListener('scroll', this._onScroll);
+  }
+
+  setCursor(socketId, range, name, color) {
+    if (!range) return;
+
+    let entry = this.cursors[socketId];
+    if (!entry) {
+      // Create cursor DOM elements
+      const el = document.createElement('div');
+      el.style.cssText = 'position:absolute;width:2.5px;pointer-events:none;transition:top 80ms ease-out,left 80ms ease-out;border-radius:1px;';
+      
+      const flag = document.createElement('div');
+      flag.style.cssText = `
+        position:absolute;top:-22px;left:-1px;
+        padding:2px 8px;font-size:11px;font-weight:700;color:#fff;
+        white-space:nowrap;border-radius:4px 4px 4px 0;
+        box-shadow:0 2px 8px rgba(0,0,0,0.3);line-height:16px;
+        pointer-events:none;user-select:none;
+        animation:cursorFadeIn 0.2s ease-out;
+      `;
+      flag.textContent = name;
+      flag.style.backgroundColor = color;
+      el.style.backgroundColor = color;
+
+      // Blinking animation
+      el.animate([
+        { opacity: 1 }, { opacity: 0.3 }, { opacity: 1 }
+      ], { duration: 1200, iterations: Infinity });
+
+      el.appendChild(flag);
+      this.layer.appendChild(el);
+      
+      entry = { el, flag, range: null, name, color, timeout: null };
+      this.cursors[socketId] = entry;
+    }
+
+    // Update stored range
+    entry.range = range;
+    entry.name = name;
+    entry.flag.textContent = name;
+
+    // Position it
+    this._position(entry);
+
+    // Show the element
+    entry.el.style.display = 'block';
+
+    // Auto-hide after 15 seconds of no updates
+    if (entry.timeout) clearTimeout(entry.timeout);
+    entry.timeout = setTimeout(() => {
+      if (entry.el) entry.el.style.display = 'none';
+    }, 15000);
+  }
+
+  removeCursor(socketId) {
+    const entry = this.cursors[socketId];
+    if (entry) {
+      if (entry.timeout) clearTimeout(entry.timeout);
+      entry.el.remove();
+      delete this.cursors[socketId];
+    }
+  }
+
+  updateAll() {
+    Object.values(this.cursors).forEach(entry => {
+      if (entry.el.style.display !== 'none') {
+        this._position(entry);
+      }
+    });
+  }
+
+  _position(entry) {
+    try {
+      const bounds = this.quill.getBounds(entry.range.index, entry.range.length || 0);
+      if (!bounds) { entry.el.style.display = 'none'; return; }
+      
+      entry.el.style.top = bounds.top + 'px';
+      entry.el.style.left = bounds.left + 'px';
+      entry.el.style.height = bounds.height + 'px';
+    } catch (e) {
+      entry.el.style.display = 'none';
+    }
+  }
+
+  destroy() {
+    Object.keys(this.cursors).forEach(id => this.removeCursor(id));
+    if (this.layer.parentNode) this.layer.remove();
+    const scrollEl = this.quill.scrollingContainer || this.quill.container;
+    scrollEl.removeEventListener('scroll', this._onScroll);
+  }
+}
+
+// ═══════════ TOOLBAR ═══════════
 const CustomToolbar = ({ quill, activeFormats }) => {
   if (!quill) return null;
 
@@ -40,11 +144,8 @@ const CustomToolbar = ({ quill, activeFormats }) => {
 
   const handleLink = () => {
     const value = prompt('Enter link URL:');
-    if (value) {
-      quill.format('link', value);
-    } else {
-      quill.format('link', false);
-    }
+    if (value) { quill.format('link', value); }
+    else { quill.format('link', false); }
     quill.focus();
   };
 
@@ -54,15 +155,11 @@ const CustomToolbar = ({ quill, activeFormats }) => {
     quill.focus();
   };
 
-  const ToolbarButton = ({ icon: Icon, format, value = true, onClick, title, label }) => {
+  const ToolbarButton = ({ icon: Icon, format, value = true, onClick, title }) => {
     let isActive = false;
-    if (value === true) {
-      isActive = !!activeFormats[format];
-    } else if (value === false) {
-      isActive = !activeFormats[format] || activeFormats[format] === false;
-    } else {
-      isActive = activeFormats[format] === value;
-    }
+    if (value === true) isActive = !!activeFormats[format];
+    else if (value === false) isActive = !activeFormats[format];
+    else isActive = activeFormats[format] === value;
 
     return (
       <button
@@ -72,14 +169,13 @@ const CustomToolbar = ({ quill, activeFormats }) => {
           e.preventDefault();
           onClick ? onClick() : toggleFormat(format, value);
         }}
-        className={`h-8 min-w-[32px] px-1.5 rounded-lg flex items-center justify-center gap-1 transition-all cursor-pointer text-xs font-medium ${
+        className={`h-8 min-w-[32px] px-1.5 rounded-lg flex items-center justify-center transition-all cursor-pointer ${
           isActive 
-            ? 'bg-violet-600/20 text-violet-300 shadow-sm ring-1 ring-violet-500/30' 
+            ? 'bg-violet-600/20 text-violet-300 ring-1 ring-violet-500/30' 
             : 'text-slate-400 hover:bg-white/5 hover:text-slate-200'
         }`}
       >
         <Icon className="w-[15px] h-[15px]" />
-        {label && <span className="text-[11px]">{label}</span>}
       </button>
     );
   };
@@ -98,8 +194,6 @@ const CustomToolbar = ({ quill, activeFormats }) => {
 
   return (
     <div className="bg-[#16161e] border-b border-white/8 flex items-center justify-center gap-1 py-2 px-4 z-20 shrink-0 select-none">
-      
-      {/* Heading Dropdown */}
       <div className="relative">
         <button
           type="button"
@@ -143,23 +237,18 @@ const CustomToolbar = ({ quill, activeFormats }) => {
       </div>
 
       <Divider />
-
       <div className="flex items-center gap-0.5">
         <ToolbarButton icon={Bold} format="bold" title="Bold (⌘B)" />
         <ToolbarButton icon={Italic} format="italic" title="Italic (⌘I)" />
         <ToolbarButton icon={Underline} format="underline" title="Underline (⌘U)" />
         <ToolbarButton icon={Strikethrough} format="strike" title="Strikethrough" />
       </div>
-
       <Divider />
-
       <div className="flex items-center gap-0.5">
         <ToolbarButton icon={ListOrdered} format="list" value="ordered" title="Numbered list" />
         <ToolbarButton icon={List} format="list" value="bullet" title="Bulleted list" />
       </div>
-
       <Divider />
-
       <div className="flex items-center gap-0.5">
         <ToolbarButton icon={Link2} format="link" onClick={handleLink} title="Insert link (⌘K)" />
         <ToolbarButton icon={Quote} format="blockquote" onClick={handleBlockquote} title="Block quote" />
@@ -168,112 +257,18 @@ const CustomToolbar = ({ quill, activeFormats }) => {
   );
 };
 
-// ═══════════ REMOTE CURSOR COMPONENT ═══════════
-const RemoteCursor = ({ quill, range, name, color, scrollContainer }) => {
-  const [pos, setPos] = useState(null);
-
-  const updatePosition = useCallback(() => {
-    if (!quill || !range) return;
-    try {
-      const bounds = quill.getBounds(range.index, range.length || 0);
-      if (!bounds) { setPos(null); return; }
-      
-      // Get scroll offset from the scrollable container
-      const scrollTop = scrollContainer?.scrollTop || 0;
-      const scrollLeft = scrollContainer?.scrollLeft || 0;
-
-      // getBounds returns positions relative to the editor container, 
-      // but we need to account for scroll
-      setPos({
-        top: bounds.top,
-        left: bounds.left,
-        height: bounds.height,
-        selectionWidth: bounds.width || 0,
-      });
-    } catch (e) {
-      setPos(null);
-    }
-  }, [quill, range, scrollContainer]);
-
-  useEffect(() => {
-    updatePosition();
-  }, [updatePosition]);
-
-  // Also update on scroll
-  useEffect(() => {
-    if (!scrollContainer) return;
-    const handleScroll = () => updatePosition();
-    scrollContainer.addEventListener('scroll', handleScroll);
-    return () => scrollContainer.removeEventListener('scroll', handleScroll);
-  }, [scrollContainer, updatePosition]);
-
-  if (!pos) return null;
-
-  return (
-    <>
-      {/* Cursor line */}
-      <div
-        className="absolute pointer-events-none z-[15] transition-all duration-75 ease-out"
-        style={{
-          top: `${pos.top}px`,
-          left: `${pos.left}px`,
-          height: `${pos.height}px`,
-          width: '2.5px',
-          backgroundColor: color,
-          borderRadius: '1px',
-        }}
-      >
-        {/* Name flag */}
-        <div
-          className="absolute whitespace-nowrap pointer-events-none select-none"
-          style={{
-            top: '-22px',
-            left: '-1px',
-            backgroundColor: color,
-            color: '#fff',
-            fontSize: '11px',
-            fontWeight: 700,
-            padding: '2px 8px',
-            borderRadius: '4px 4px 4px 0',
-            boxShadow: '0 2px 8px rgba(0,0,0,0.3)',
-            lineHeight: '16px',
-          }}
-        >
-          {name}
-        </div>
-      </div>
-
-      {/* Selection highlight */}
-      {pos.selectionWidth > 0 && (
-        <div
-          className="absolute pointer-events-none z-[14]"
-          style={{
-            top: `${pos.top}px`,
-            left: `${pos.left}px`,
-            height: `${pos.height}px`,
-            width: `${pos.selectionWidth}px`,
-            backgroundColor: color,
-            opacity: 0.2,
-            borderRadius: '2px',
-          }}
-        />
-      )}
-    </>
-  );
-};
-
+// ═══════════ MAIN EDITOR ═══════════
 const RichTextEditor = ({ documentId, socket, emit }) => {
   const editorContainerRef = useRef(null);
   const quillRef = useRef(null);
   const ydocRef = useRef(null);
   const bindingRef = useRef(null);
   const providerRef = useRef(null);
+  const cursorMgrRef = useRef(null);
   const [editorLoaded, setEditorLoaded] = useState(false);
   const [activeFormats, setActiveFormats] = useState({});
-  const [remoteCursors, setRemoteCursors] = useState({});
-  const [scrollContainer, setScrollContainer] = useState(null);
-  const cursorTimeoutsRef = useRef({});
 
+  // 1. Initialize Quill + Y.js
   useEffect(() => {
     const wrapper = editorContainerRef.current;
     if (!wrapper) return;
@@ -288,11 +283,8 @@ const RichTextEditor = ({ documentId, socket, emit }) => {
     quillRef.current = quill;
     window.__quill = quill;
 
-    // Find the scroll container (ql-container)
-    setTimeout(() => {
-      const qlContainer = wrapper.querySelector('.ql-container');
-      if (qlContainer) setScrollContainer(qlContainer);
-    }, 100);
+    // Create cursor manager
+    cursorMgrRef.current = new CursorManager(quill);
 
     const ydoc = new Y.Doc();
     ydocRef.current = ydoc;
@@ -300,10 +292,7 @@ const RichTextEditor = ({ documentId, socket, emit }) => {
 
     const provider = new IndexeddbPersistence(documentId, ydoc);
     providerRef.current = provider;
-
-    provider.on('synced', () => {
-      console.log('IndexedDB loaded local state');
-    });
+    provider.on('synced', () => console.log('IndexedDB loaded local state'));
 
     const binding = new QuillBinding(ytext, quill);
     bindingRef.current = binding;
@@ -317,6 +306,7 @@ const RichTextEditor = ({ documentId, socket, emit }) => {
 
     return () => {
       quill.off('editor-change', handleEditorChange);
+      if (cursorMgrRef.current) { cursorMgrRef.current.destroy(); cursorMgrRef.current = null; }
       binding.destroy();
       provider.destroy();
       ydoc.destroy();
@@ -326,7 +316,7 @@ const RichTextEditor = ({ documentId, socket, emit }) => {
     };
   }, [documentId]);
 
-  // Yjs sync
+  // 2. Y.js sync outgoing
   useEffect(() => {
     if (!editorLoaded || !ydocRef.current || !socket) return;
 
@@ -342,74 +332,40 @@ const RichTextEditor = ({ documentId, socket, emit }) => {
     };
 
     ydocRef.current.on('update', handleYjsUpdate);
-
-    return () => {
-      if (ydocRef.current) {
-        ydocRef.current.off('update', handleYjsUpdate);
-      }
-    };
+    return () => { if (ydocRef.current) ydocRef.current.off('update', handleYjsUpdate); };
   }, [editorLoaded, socket, documentId]);
 
-  // Socket event handlers
+  // 3. Socket handlers — incoming updates + cursors
   useEffect(() => {
     if (!socket) return;
 
     const handleDocUpdated = ({ update }) => {
       try {
         if (ydocRef.current) {
-          const binaryUpdate = Uint8Array.from(atob(update), (c) => c.charCodeAt(0));
-          Y.applyUpdate(ydocRef.current, binaryUpdate, socket);
+          const bin = Uint8Array.from(atob(update), c => c.charCodeAt(0));
+          Y.applyUpdate(ydocRef.current, bin, socket);
         }
-      } catch (err) {
-        console.error('Error applying remote Yjs update:', err);
-      }
+      } catch (err) { console.error('Error applying remote Yjs update:', err); }
     };
 
     const handleDocLoad = ({ content }) => {
       if (content && ydocRef.current) {
         try {
-          const binaryUpdate = Uint8Array.from(atob(content), (c) => c.charCodeAt(0));
-          Y.applyUpdate(ydocRef.current, binaryUpdate, socket);
-        } catch (err) {
-          console.error('Failed to load initial Yjs doc state:', err);
-        }
+          const bin = Uint8Array.from(atob(content), c => c.charCodeAt(0));
+          Y.applyUpdate(ydocRef.current, bin, socket);
+        } catch (err) { console.error('Failed to load initial Yjs doc state:', err); }
       }
     };
 
-    // Receive remote cursor updates — keep cursor visible for 10 seconds
-    const handleCursorMoved = ({ socketId, userId, name, cursor, isTyping }) => {
-      if (cursor) {
-        setRemoteCursors(prev => ({
-          ...prev,
-          [socketId]: { range: cursor, name, color: getCursorColor(userId) }
-        }));
-
-        // Clear any existing timeout for this cursor
-        if (cursorTimeoutsRef.current[socketId]) {
-          clearTimeout(cursorTimeoutsRef.current[socketId]);
-        }
-
-        // Auto-hide cursor after 10 seconds of inactivity
-        cursorTimeoutsRef.current[socketId] = setTimeout(() => {
-          setRemoteCursors(prev => {
-            const updated = { ...prev };
-            delete updated[socketId];
-            return updated;
-          });
-          delete cursorTimeoutsRef.current[socketId];
-        }, 10000);
+    const handleCursorMoved = ({ socketId, userId, name, cursor }) => {
+      if (cursor && cursorMgrRef.current) {
+        cursorMgrRef.current.setCursor(socketId, cursor, name, getCursorColor(userId));
       }
     };
 
     const handleUserLeft = ({ socketId }) => {
-      setRemoteCursors(prev => {
-        const updated = { ...prev };
-        delete updated[socketId];
-        return updated;
-      });
-      if (cursorTimeoutsRef.current[socketId]) {
-        clearTimeout(cursorTimeoutsRef.current[socketId]);
-        delete cursorTimeoutsRef.current[socketId];
+      if (cursorMgrRef.current) {
+        cursorMgrRef.current.removeCursor(socketId);
       }
     };
 
@@ -423,61 +379,39 @@ const RichTextEditor = ({ documentId, socket, emit }) => {
       socket.off('document:load', handleDocLoad);
       socket.off('cursor:moved', handleCursorMoved);
       socket.off('user:left', handleUserLeft);
-      // Clean up all cursor timeouts
-      Object.values(cursorTimeoutsRef.current).forEach(clearTimeout);
-      cursorTimeoutsRef.current = {};
     };
   }, [socket]);
 
-  // Emit local cursor position — always send cursor, not just when "typing"
+  // 4. Emit local cursor on selection or text change
   useEffect(() => {
     if (!quillRef.current || !socket) return;
 
-    const handleSelectionChange = (range) => {
-      if (range) {
-        emit('cursor:update', {
-          documentId,
-          range,
-          isTyping: true,
-        });
-      }
-    };
-
-    // Also emit cursor on text changes (so cursor position updates as user types)
-    const handleTextChange = () => {
+    const sendCursor = () => {
       const range = quillRef.current.getSelection();
       if (range) {
-        emit('cursor:update', {
-          documentId,
-          range,
-          isTyping: true,
-        });
+        emit('cursor:update', { documentId, range, isTyping: true });
       }
     };
 
-    quillRef.current.on('selection-change', handleSelectionChange);
-    quillRef.current.on('text-change', handleTextChange);
+    quillRef.current.on('selection-change', (range) => { if (range) sendCursor(); });
+    quillRef.current.on('text-change', sendCursor);
 
     return () => {
       if (quillRef.current) {
-        quillRef.current.off('selection-change', handleSelectionChange);
-        quillRef.current.off('text-change', handleTextChange);
+        quillRef.current.off('selection-change');
+        quillRef.current.off('text-change');
       }
     };
   }, [editorLoaded, socket, documentId]);
 
-  // Yjs doc state getter
+  // 5. Expose Y.js state getter
   useEffect(() => {
     if (!editorLoaded || !ydocRef.current) return;
-    
     window.__getYjsDocState = () => {
       const state = Y.encodeStateAsUpdate(ydocRef.current);
       return btoa(String.fromCharCode(...state));
     };
-
-    return () => {
-      delete window.__getYjsDocState;
-    };
+    return () => { delete window.__getYjsDocState; };
   }, [editorLoaded]);
 
   return (
@@ -488,7 +422,7 @@ const RichTextEditor = ({ documentId, socket, emit }) => {
       
       <div 
         ref={editorContainerRef} 
-        className="flex-1 flex flex-col overflow-hidden relative
+        className="flex-1 flex flex-col overflow-hidden
           [&_.ql-container]:border-none [&_.ql-container]:bg-transparent [&_.ql-container]:flex-1 [&_.ql-container]:overflow-y-auto [&_.ql-container]:relative
           
           [&_.ql-editor]:relative [&_.ql-editor]:bg-white [&_.ql-editor]:text-[#202124] [&_.ql-editor]:w-full [&_.ql-editor]:max-w-[816px] [&_.ql-editor]:min-h-[1056px] [&_.ql-editor]:my-8 [&_.ql-editor]:mx-auto [&_.ql-editor]:p-8 sm:[&_.ql-editor]:p-[96px] [&_.ql-editor]:shadow-[0_0_0_1px_rgba(255,255,255,0.05),0_4px_24px_rgba(0,0,0,0.3)] [&_.ql-editor]:rounded-lg [&_.ql-editor]:outline-none [&_.ql-editor]:font-sans [&_.ql-editor]:text-[15px] [&_.ql-editor]:leading-[1.75] [&_.ql-editor]:cursor-text [&_.ql-editor]:whitespace-pre-wrap
@@ -508,18 +442,6 @@ const RichTextEditor = ({ documentId, socket, emit }) => {
           [&_.ql-editor_a]:text-violet-600 [&_.ql-editor_a]:underline hover:[&_.ql-editor_a]:text-violet-800
         " 
       />
-
-      {/* Remote Cursors — rendered inside the ql-container so they scroll with the document */}
-      {editorLoaded && quillRef.current && Object.entries(remoteCursors).map(([socketId, cursorData]) => (
-        <RemoteCursor
-          key={socketId}
-          quill={quillRef.current}
-          range={cursorData.range}
-          name={cursorData.name}
-          color={cursorData.color}
-          scrollContainer={scrollContainer}
-        />
-      ))}
     </div>
   );
 };
