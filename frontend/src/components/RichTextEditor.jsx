@@ -1,9 +1,8 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState, useCallback } from 'react';
 import Quill from 'quill';
 import * as Y from 'yjs';
 import { QuillBinding } from 'y-quill';
 import { IndexeddbPersistence } from 'y-indexeddb';
-import { createPortal } from 'react-dom';
 import { 
   Bold, Italic, Underline, Strikethrough, 
   List, ListOrdered, Link2, Quote, 
@@ -12,11 +11,22 @@ import {
   ChevronDown,
 } from 'lucide-react';
 
+const CURSOR_COLORS = [
+  { bg: '#ef4444', name: 'red' },
+  { bg: '#f97316', name: 'orange' },
+  { bg: '#10b981', name: 'emerald' },
+  { bg: '#3b82f6', name: 'blue' },
+  { bg: '#8b5cf6', name: 'violet' },
+  { bg: '#ec4899', name: 'pink' },
+  { bg: '#14b8a6', name: 'teal' },
+  { bg: '#f59e0b', name: 'amber' },
+  { bg: '#6366f1', name: 'indigo' },
+];
+
 const getCursorColor = (userId) => {
-  const colors = ['#ef4444', '#f97316', '#f59e0b', '#10b981', '#14b8a6', '#3b82f6', '#6366f1', '#8b5cf6', '#d946ef'];
-  if (!userId) return colors[0];
+  if (!userId) return CURSOR_COLORS[0].bg;
   const hash = String(userId).split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
-  return colors[hash % colors.length];
+  return CURSOR_COLORS[hash % CURSOR_COLORS.length].bg;
 };
 
 const CustomToolbar = ({ quill, activeFormats }) => {
@@ -76,7 +86,6 @@ const CustomToolbar = ({ quill, activeFormats }) => {
 
   const Divider = () => <div className="w-px h-5 bg-white/8 mx-1" />;
 
-  // Get current heading label
   const getHeadingLabel = () => {
     const h = activeFormats.header;
     if (h === 1) return 'Heading 1';
@@ -159,6 +168,100 @@ const CustomToolbar = ({ quill, activeFormats }) => {
   );
 };
 
+// ═══════════ REMOTE CURSOR COMPONENT ═══════════
+const RemoteCursor = ({ quill, range, name, color, scrollContainer }) => {
+  const [pos, setPos] = useState(null);
+
+  const updatePosition = useCallback(() => {
+    if (!quill || !range) return;
+    try {
+      const bounds = quill.getBounds(range.index, range.length || 0);
+      if (!bounds) { setPos(null); return; }
+      
+      // Get scroll offset from the scrollable container
+      const scrollTop = scrollContainer?.scrollTop || 0;
+      const scrollLeft = scrollContainer?.scrollLeft || 0;
+
+      // getBounds returns positions relative to the editor container, 
+      // but we need to account for scroll
+      setPos({
+        top: bounds.top,
+        left: bounds.left,
+        height: bounds.height,
+        selectionWidth: bounds.width || 0,
+      });
+    } catch (e) {
+      setPos(null);
+    }
+  }, [quill, range, scrollContainer]);
+
+  useEffect(() => {
+    updatePosition();
+  }, [updatePosition]);
+
+  // Also update on scroll
+  useEffect(() => {
+    if (!scrollContainer) return;
+    const handleScroll = () => updatePosition();
+    scrollContainer.addEventListener('scroll', handleScroll);
+    return () => scrollContainer.removeEventListener('scroll', handleScroll);
+  }, [scrollContainer, updatePosition]);
+
+  if (!pos) return null;
+
+  return (
+    <>
+      {/* Cursor line */}
+      <div
+        className="absolute pointer-events-none z-[15] transition-all duration-75 ease-out"
+        style={{
+          top: `${pos.top}px`,
+          left: `${pos.left}px`,
+          height: `${pos.height}px`,
+          width: '2.5px',
+          backgroundColor: color,
+          borderRadius: '1px',
+        }}
+      >
+        {/* Name flag */}
+        <div
+          className="absolute whitespace-nowrap pointer-events-none select-none"
+          style={{
+            top: '-22px',
+            left: '-1px',
+            backgroundColor: color,
+            color: '#fff',
+            fontSize: '11px',
+            fontWeight: 700,
+            padding: '2px 8px',
+            borderRadius: '4px 4px 4px 0',
+            boxShadow: '0 2px 8px rgba(0,0,0,0.3)',
+            lineHeight: '16px',
+          }}
+        >
+          {name}
+        </div>
+      </div>
+
+      {/* Selection highlight */}
+      {pos.selectionWidth > 0 && (
+        <div
+          className="absolute pointer-events-none z-[14]"
+          style={{
+            top: `${pos.top}px`,
+            left: `${pos.left}px`,
+            height: `${pos.height}px`,
+            width: `${pos.selectionWidth}px`,
+            backgroundColor: color,
+            opacity: 0.2,
+            borderRadius: '2px',
+          }}
+        />
+      )}
+    </>
+  );
+};
+
 const RichTextEditor = ({ documentId, socket, emit }) => {
   const editorContainerRef = useRef(null);
   const quillRef = useRef(null);
@@ -166,9 +269,10 @@ const RichTextEditor = ({ documentId, socket, emit }) => {
   const bindingRef = useRef(null);
   const providerRef = useRef(null);
   const [editorLoaded, setEditorLoaded] = useState(false);
-  const [cursorContainer, setCursorContainer] = useState(null);
   const [activeFormats, setActiveFormats] = useState({});
   const [remoteCursors, setRemoteCursors] = useState({});
+  const [scrollContainer, setScrollContainer] = useState(null);
+  const cursorTimeoutsRef = useRef({});
 
   useEffect(() => {
     const wrapper = editorContainerRef.current;
@@ -184,9 +288,11 @@ const RichTextEditor = ({ documentId, socket, emit }) => {
     quillRef.current = quill;
     window.__quill = quill;
 
-    const cContainer = quill.addContainer('ql-remote-cursors');
-    cContainer.className = 'absolute inset-0 pointer-events-none z-10';
-    setCursorContainer(cContainer);
+    // Find the scroll container (ql-container)
+    setTimeout(() => {
+      const qlContainer = wrapper.querySelector('.ql-container');
+      if (qlContainer) setScrollContainer(qlContainer);
+    }, 100);
 
     const ydoc = new Y.Doc();
     ydocRef.current = ydoc;
@@ -220,6 +326,7 @@ const RichTextEditor = ({ documentId, socket, emit }) => {
     };
   }, [documentId]);
 
+  // Yjs sync
   useEffect(() => {
     if (!editorLoaded || !ydocRef.current || !socket) return;
 
@@ -243,6 +350,7 @@ const RichTextEditor = ({ documentId, socket, emit }) => {
     };
   }, [editorLoaded, socket, documentId]);
 
+  // Socket event handlers
   useEffect(() => {
     if (!socket) return;
 
@@ -268,27 +376,41 @@ const RichTextEditor = ({ documentId, socket, emit }) => {
       }
     };
 
+    // Receive remote cursor updates — keep cursor visible for 10 seconds
     const handleCursorMoved = ({ socketId, userId, name, cursor, isTyping }) => {
-      if (cursor && isTyping) {
+      if (cursor) {
         setRemoteCursors(prev => ({
           ...prev,
           [socketId]: { range: cursor, name, color: getCursorColor(userId) }
         }));
-      } else {
-        setRemoteCursors(prev => {
-          const newCursors = { ...prev };
-          delete newCursors[socketId];
-          return newCursors;
-        });
+
+        // Clear any existing timeout for this cursor
+        if (cursorTimeoutsRef.current[socketId]) {
+          clearTimeout(cursorTimeoutsRef.current[socketId]);
+        }
+
+        // Auto-hide cursor after 10 seconds of inactivity
+        cursorTimeoutsRef.current[socketId] = setTimeout(() => {
+          setRemoteCursors(prev => {
+            const updated = { ...prev };
+            delete updated[socketId];
+            return updated;
+          });
+          delete cursorTimeoutsRef.current[socketId];
+        }, 10000);
       }
     };
 
     const handleUserLeft = ({ socketId }) => {
       setRemoteCursors(prev => {
-        const newCursors = { ...prev };
-        delete newCursors[socketId];
-        return newCursors;
+        const updated = { ...prev };
+        delete updated[socketId];
+        return updated;
       });
+      if (cursorTimeoutsRef.current[socketId]) {
+        clearTimeout(cursorTimeoutsRef.current[socketId]);
+        delete cursorTimeoutsRef.current[socketId];
+      }
     };
 
     socket.on('document:updated', handleDocUpdated);
@@ -301,9 +423,13 @@ const RichTextEditor = ({ documentId, socket, emit }) => {
       socket.off('document:load', handleDocLoad);
       socket.off('cursor:moved', handleCursorMoved);
       socket.off('user:left', handleUserLeft);
+      // Clean up all cursor timeouts
+      Object.values(cursorTimeoutsRef.current).forEach(clearTimeout);
+      cursorTimeoutsRef.current = {};
     };
   }, [socket]);
 
+  // Emit local cursor position — always send cursor, not just when "typing"
   useEffect(() => {
     if (!quillRef.current || !socket) return;
 
@@ -314,28 +440,33 @@ const RichTextEditor = ({ documentId, socket, emit }) => {
           range,
           isTyping: true,
         });
+      }
+    };
 
-        const timer = setTimeout(() => {
-          emit('cursor:update', {
-            documentId,
-            range,
-            isTyping: false,
-          });
-        }, 1500);
-
-        return () => clearTimeout(timer);
+    // Also emit cursor on text changes (so cursor position updates as user types)
+    const handleTextChange = () => {
+      const range = quillRef.current.getSelection();
+      if (range) {
+        emit('cursor:update', {
+          documentId,
+          range,
+          isTyping: true,
+        });
       }
     };
 
     quillRef.current.on('selection-change', handleSelectionChange);
+    quillRef.current.on('text-change', handleTextChange);
 
     return () => {
       if (quillRef.current) {
         quillRef.current.off('selection-change', handleSelectionChange);
+        quillRef.current.off('text-change', handleTextChange);
       }
     };
   }, [editorLoaded, socket, documentId]);
 
+  // Yjs doc state getter
   useEffect(() => {
     if (!editorLoaded || !ydocRef.current) return;
     
@@ -349,47 +480,6 @@ const RichTextEditor = ({ documentId, socket, emit }) => {
     };
   }, [editorLoaded]);
 
-  const renderRemoteCursors = () => {
-    if (!quillRef.current || !cursorContainer) return null;
-    
-    const cursors = Object.entries(remoteCursors).map(([socketId, cursorData]) => {
-      const { range, name, color } = cursorData;
-      if (!range) return null;
-      
-      try {
-        const bounds = quillRef.current.getBounds(range.index);
-        if (!bounds) return null;
-        
-        return (
-          <div
-            key={socketId}
-            className="absolute transition-all duration-100 ease-linear pointer-events-none"
-            style={{
-              top: `${bounds.top}px`,
-              left: `${bounds.left}px`,
-              height: `${bounds.height}px`,
-            }}
-          >
-            <div 
-              className="absolute w-[2px] h-full"
-              style={{ backgroundColor: color }}
-            />
-            <div 
-              className="absolute top-[-24px] left-[-2px] px-2 py-1 text-[11px] font-bold text-white whitespace-nowrap rounded-t-lg rounded-br-lg shadow-md z-50"
-              style={{ backgroundColor: color }}
-            >
-              {name}
-            </div>
-          </div>
-        );
-      } catch (err) {
-        return null;
-      }
-    });
-
-    return createPortal(cursors, cursorContainer);
-  };
-
   return (
     <div className="flex-1 bg-[#0f0f14] flex flex-col overflow-hidden relative">
       <div className="overflow-x-auto scrollbar-hide">
@@ -398,7 +488,7 @@ const RichTextEditor = ({ documentId, socket, emit }) => {
       
       <div 
         ref={editorContainerRef} 
-        className="flex-1 flex flex-col overflow-hidden
+        className="flex-1 flex flex-col overflow-hidden relative
           [&_.ql-container]:border-none [&_.ql-container]:bg-transparent [&_.ql-container]:flex-1 [&_.ql-container]:overflow-y-auto [&_.ql-container]:relative
           
           [&_.ql-editor]:relative [&_.ql-editor]:bg-white [&_.ql-editor]:text-[#202124] [&_.ql-editor]:w-full [&_.ql-editor]:max-w-[816px] [&_.ql-editor]:min-h-[1056px] [&_.ql-editor]:my-8 [&_.ql-editor]:mx-auto [&_.ql-editor]:p-8 sm:[&_.ql-editor]:p-[96px] [&_.ql-editor]:shadow-[0_0_0_1px_rgba(255,255,255,0.05),0_4px_24px_rgba(0,0,0,0.3)] [&_.ql-editor]:rounded-lg [&_.ql-editor]:outline-none [&_.ql-editor]:font-sans [&_.ql-editor]:text-[15px] [&_.ql-editor]:leading-[1.75] [&_.ql-editor]:cursor-text [&_.ql-editor]:whitespace-pre-wrap
@@ -418,7 +508,18 @@ const RichTextEditor = ({ documentId, socket, emit }) => {
           [&_.ql-editor_a]:text-violet-600 [&_.ql-editor_a]:underline hover:[&_.ql-editor_a]:text-violet-800
         " 
       />
-      {renderRemoteCursors()}
+
+      {/* Remote Cursors — rendered inside the ql-container so they scroll with the document */}
+      {editorLoaded && quillRef.current && Object.entries(remoteCursors).map(([socketId, cursorData]) => (
+        <RemoteCursor
+          key={socketId}
+          quill={quillRef.current}
+          range={cursorData.range}
+          name={cursorData.name}
+          color={cursorData.color}
+          scrollContainer={scrollContainer}
+        />
+      ))}
     </div>
   );
 };
