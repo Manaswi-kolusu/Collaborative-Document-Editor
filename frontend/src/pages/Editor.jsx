@@ -211,8 +211,13 @@ const Editor = () => {
     setTimeout(() => { setSaving(false); }, 1000);
   };
 
-  const handleVersionRestored = () => {
-    window.location.reload();
+  const handleVersionRestored = (content) => {
+    if (window.__restoreYjsDocState && content) {
+      window.__restoreYjsDocState(content);
+      addActivity('restore', 'Restored document version from history');
+    } else {
+      window.location.reload();
+    }
   };
 
   if (loading) {

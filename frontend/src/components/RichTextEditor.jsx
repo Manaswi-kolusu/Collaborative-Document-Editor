@@ -116,8 +116,12 @@ class CursorManager {
       const bounds = this.quill.getBounds(entry.range.index, entry.range.length || 0);
       if (!bounds) { entry.el.style.display = 'none'; return; }
       
-      entry.el.style.top = bounds.top + 'px';
-      entry.el.style.left = bounds.left + 'px';
+      const scrollEl = this.quill.scrollingContainer || this.quill.container;
+      const scrollTop = scrollEl.scrollTop || 0;
+      const scrollLeft = scrollEl.scrollLeft || 0;
+
+      entry.el.style.top = (bounds.top + scrollTop) + 'px';
+      entry.el.style.left = (bounds.left + scrollLeft) + 'px';
       entry.el.style.height = bounds.height + 'px';
     } catch (e) {
       entry.el.style.display = 'none';
@@ -358,8 +362,12 @@ const RichTextEditor = ({ documentId, socket, emit }) => {
     };
 
     const handleCursorMoved = ({ socketId, userId, name, cursor }) => {
-      if (cursor && cursorMgrRef.current) {
-        cursorMgrRef.current.setCursor(socketId, cursor, name, getCursorColor(userId));
+      if (cursorMgrRef.current) {
+        if (cursor) {
+          cursorMgrRef.current.setCursor(socketId, cursor, name, getCursorColor(userId));
+        } else {
+          cursorMgrRef.current.removeCursor(socketId);
+        }
       }
     };
 
@@ -388,12 +396,10 @@ const RichTextEditor = ({ documentId, socket, emit }) => {
 
     const sendCursor = () => {
       const range = quillRef.current.getSelection();
-      if (range) {
-        emit('cursor:update', { documentId, range, isTyping: true });
-      }
+      emit('cursor:update', { documentId, range, isTyping: true });
     };
 
-    quillRef.current.on('selection-change', (range) => { if (range) sendCursor(); });
+    quillRef.current.on('selection-change', (range) => { sendCursor(); });
     quillRef.current.on('text-change', sendCursor);
 
     return () => {
@@ -411,7 +417,27 @@ const RichTextEditor = ({ documentId, socket, emit }) => {
       const state = Y.encodeStateAsUpdate(ydocRef.current);
       return btoa(String.fromCharCode(...state));
     };
-    return () => { delete window.__getYjsDocState; };
+    window.__restoreYjsDocState = (base64Content) => {
+      try {
+        const bin = Uint8Array.from(atob(base64Content), c => c.charCodeAt(0));
+        const tempYDoc = new Y.Doc();
+        Y.applyUpdate(tempYDoc, bin);
+        const tempText = tempYDoc.getText('quill-content');
+        const delta = tempText.toDelta();
+
+        const ytext = ydocRef.current.getText('quill-content');
+        ydocRef.current.transact(() => {
+          ytext.delete(0, ytext.length);
+          ytext.applyDelta(delta);
+        });
+      } catch (err) {
+        console.error('Failed to restore Yjs document state:', err);
+      }
+    };
+    return () => { 
+      delete window.__getYjsDocState; 
+      delete window.__restoreYjsDocState;
+    };
   }, [editorLoaded]);
 
   return (
