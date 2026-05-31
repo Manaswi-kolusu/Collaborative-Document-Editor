@@ -37,6 +37,35 @@ import {
   Zap,
 } from 'lucide-react';
 
+// Menu helper components (defined outside Editor to avoid re-creation)
+const DropdownMenu = ({ children }) => (
+  <div
+    className="absolute left-0 top-full mt-1 w-56 bg-[#1e1e2e] border border-white/10 rounded-xl shadow-[0_16px_48px_rgba(0,0,0,0.4)] py-1.5 z-[60] backdrop-blur-xl"
+    onClick={(e) => e.stopPropagation()}
+  >
+    {children}
+  </div>
+);
+
+const MenuItem = ({ icon: Icon, label, shortcut, onClick, danger, onClose }) => (
+  <div
+    onClick={(e) => {
+      e.stopPropagation();
+      onClick?.();
+      onClose?.();
+    }}
+    className={`flex items-center px-3 py-2 cursor-pointer text-[13px] transition-colors ${
+      danger ? 'text-red-400 hover:bg-red-500/10' : 'text-slate-300 hover:bg-white/5'
+    }`}
+  >
+    <Icon className={`h-4 w-4 mr-3 ${danger ? 'text-red-400' : 'text-slate-500'}`} />
+    <span className="flex-grow">{label}</span>
+    {shortcut && <span className="text-[10px] text-slate-600 ml-4 font-mono">{shortcut}</span>}
+  </div>
+);
+
+const MenuDivider = () => <hr className="border-white/8 my-1 mx-2" />;
+
 const Editor = () => {
   const { id: documentId } = useParams();
   const navigate = useNavigate();
@@ -203,28 +232,6 @@ const Editor = () => {
     setActiveMenu(activeMenu === menu ? null : menu);
   };
 
-  // Menu item component
-  const MenuItem = ({ icon: Icon, label, shortcut, onClick, danger }) => (
-    <div
-      onClick={() => { onClick?.(); setActiveMenu(null); }}
-      className={`flex items-center px-3 py-2 cursor-pointer text-[13px] transition-colors ${
-        danger ? 'text-red-400 hover:bg-red-500/10' : 'text-slate-300 hover:bg-white/5'
-      }`}
-    >
-      <Icon className={`h-4 w-4 mr-3 ${danger ? 'text-red-400' : 'text-slate-500'}`} />
-      <span className="flex-grow">{label}</span>
-      {shortcut && <span className="text-[10px] text-slate-600 ml-4 font-mono">{shortcut}</span>}
-    </div>
-  );
-
-  const DropdownMenu = ({ children }) => (
-    <div className="absolute left-0 top-full mt-1 w-56 bg-[#1e1e2e] border border-white/10 rounded-xl shadow-[0_16px_48px_rgba(0,0,0,0.4)] py-1.5 z-[60] backdrop-blur-xl" onClick={(e) => e.stopPropagation()}>
-      {children}
-    </div>
-  );
-
-  const MenuDivider = () => <hr className="border-white/8 my-1 mx-2" />;
-
   return (
     <div className="min-h-screen bg-[#0f0f14] text-white flex flex-col h-screen overflow-hidden" onClick={() => setActiveMenu(null)}>
       
@@ -344,87 +351,71 @@ const Editor = () => {
         {/* Secondary Row: Menu bar */}
         <div className="flex items-center gap-0.5 h-8 text-[12px] text-slate-400 font-medium select-none -ml-1 overflow-x-auto scrollbar-hide" onClick={(e) => e.stopPropagation()}>
           {[
-            {
-              label: 'File',
-              key: 'file',
-              items: (
-                <DropdownMenu>
-                  <MenuItem icon={FilePlus} label="New Document" onClick={handleNewDoc} />
-                  <MenuItem icon={Copy} label="Make a copy" onClick={handleDuplicateDoc} />
-                  <MenuItem icon={FileEdit} label="Rename" onClick={handleRenameClick} />
-                  <MenuItem icon={History} label="Version history" onClick={() => setActiveTab('versions')} />
-                  <MenuDivider />
-                  <MenuItem icon={Printer} label="Print" shortcut="⌘P" onClick={() => window.print()} />
-                  <MenuDivider />
-                  <MenuItem icon={Trash2} label="Move to bin" onClick={handleDeleteDoc} danger />
-                </DropdownMenu>
-              ),
-            },
-            {
-              label: 'Edit',
-              key: 'edit',
-              items: (
-                <DropdownMenu>
-                  <MenuItem icon={Undo2} label="Undo" shortcut="⌘Z" onClick={() => window.__quill?.history.undo()} />
-                  <MenuItem icon={Redo2} label="Redo" shortcut="⌘Y" onClick={() => window.__quill?.history.redo()} />
-                </DropdownMenu>
-              ),
-            },
-            {
-              label: 'View',
-              key: 'view',
-              items: (
-                <DropdownMenu>
-                  <MenuItem icon={Users} label="Collaborators" onClick={() => setActiveTab('collaborators')} />
-                  <MenuItem icon={History} label="Version History" onClick={() => setActiveTab('versions')} />
-                  <MenuItem icon={Activity} label="Activity Timeline" onClick={() => setActiveTab('activity')} />
-                </DropdownMenu>
-              ),
-            },
-            {
-              label: 'Insert',
-              key: 'insert',
-              items: (
-                <DropdownMenu>
-                  <MenuItem icon={Link2} label="Link" shortcut="⌘K" onClick={handleInsertLink} />
-                </DropdownMenu>
-              ),
-            },
-            {
-              label: 'Format',
-              key: 'format',
-              items: (
-                <DropdownMenu>
-                  <MenuItem icon={Bold} label="Bold" shortcut="⌘B" onClick={() => triggerFormat('bold')} />
-                  <MenuItem icon={Italic} label="Italic" shortcut="⌘I" onClick={() => triggerFormat('italic')} />
-                  <MenuItem icon={Underline} label="Underline" shortcut="⌘U" onClick={() => triggerFormat('underline')} />
-                  <MenuDivider />
-                  <MenuItem icon={Eraser} label="Clear formatting" shortcut="⌘\\" onClick={handleClearFormatting} />
-                </DropdownMenu>
-              ),
-            },
-            {
-              label: 'Tools',
-              key: 'tools',
-              items: (
-                <DropdownMenu>
-                  <MenuItem icon={BookOpen} label="Word count" shortcut="⌘⇧C" onClick={handleWordCount} />
-                </DropdownMenu>
-              ),
-            },
-          ].map(({ label, key, items }) => (
-            <div key={key} className="relative">
-              <span
-                onClick={(e) => { e.stopPropagation(); toggleMenu(key); }}
-                className={`px-2.5 py-1 rounded-md cursor-pointer transition-colors ${
-                  activeMenu === key ? 'bg-white/10 text-white' : 'hover:bg-white/5 hover:text-slate-200'
-                }`}
-              >
-                {label}
-              </span>
-              {activeMenu === key && items}
-            </div>
-          ))}
+            { label: 'File', key: 'file' },
+            { label: 'Edit', key: 'edit' },
+            { label: 'View', key: 'view' },
+            { label: 'Insert', key: 'insert' },
+            { label: 'Format', key: 'format' },
+            { label: 'Tools', key: 'tools' },
+          ].map(({ label, key }) => {
+            const closeMenu = () => setActiveMenu(null);
+            return (
+              <div key={key} className="relative">
+                <span
+                  onClick={(e) => { e.stopPropagation(); toggleMenu(key); }}
+                  className={`px-2.5 py-1 rounded-md cursor-pointer transition-colors ${
+                    activeMenu === key ? 'bg-white/10 text-white' : 'hover:bg-white/5 hover:text-slate-200'
+                  }`}
+                >
+                  {label}
+                </span>
+                {activeMenu === key && (
+                  <DropdownMenu>
+                    {key === 'file' && (
+                      <>
+                        <MenuItem icon={FilePlus} label="New Document" onClick={handleNewDoc} onClose={closeMenu} />
+                        <MenuItem icon={Copy} label="Make a copy" onClick={handleDuplicateDoc} onClose={closeMenu} />
+                        <MenuItem icon={FileEdit} label="Rename" onClick={handleRenameClick} onClose={closeMenu} />
+                        <MenuItem icon={History} label="Version history" onClick={() => setActiveTab('versions')} onClose={closeMenu} />
+                        <MenuDivider />
+                        <MenuItem icon={Printer} label="Print" shortcut="⌘P" onClick={() => window.print()} onClose={closeMenu} />
+                        <MenuDivider />
+                        <MenuItem icon={Trash2} label="Move to bin" onClick={handleDeleteDoc} onClose={closeMenu} danger />
+                      </>
+                    )}
+                    {key === 'edit' && (
+                      <>
+                        <MenuItem icon={Undo2} label="Undo" shortcut="⌘Z" onClick={() => window.__quill?.history.undo()} onClose={closeMenu} />
+                        <MenuItem icon={Redo2} label="Redo" shortcut="⌘Y" onClick={() => window.__quill?.history.redo()} onClose={closeMenu} />
+                      </>
+                    )}
+                    {key === 'view' && (
+                      <>
+                        <MenuItem icon={Users} label="Collaborators" onClick={() => setActiveTab('collaborators')} onClose={closeMenu} />
+                        <MenuItem icon={History} label="Version History" onClick={() => setActiveTab('versions')} onClose={closeMenu} />
+                        <MenuItem icon={Activity} label="Activity Timeline" onClick={() => setActiveTab('activity')} onClose={closeMenu} />
+                      </>
+                    )}
+                    {key === 'insert' && (
+                      <MenuItem icon={Link2} label="Link" shortcut="⌘K" onClick={handleInsertLink} onClose={closeMenu} />
+                    )}
+                    {key === 'format' && (
+                      <>
+                        <MenuItem icon={Bold} label="Bold" shortcut="⌘B" onClick={() => triggerFormat('bold')} onClose={closeMenu} />
+                        <MenuItem icon={Italic} label="Italic" shortcut="⌘I" onClick={() => triggerFormat('italic')} onClose={closeMenu} />
+                        <MenuItem icon={Underline} label="Underline" shortcut="⌘U" onClick={() => triggerFormat('underline')} onClose={closeMenu} />
+                        <MenuDivider />
+                        <MenuItem icon={Eraser} label="Clear formatting" shortcut="⌘\\" onClick={handleClearFormatting} onClose={closeMenu} />
+                      </>
+                    )}
+                    {key === 'tools' && (
+                      <MenuItem icon={BookOpen} label="Word count" shortcut="⌘⇧C" onClick={handleWordCount} onClose={closeMenu} />
+                    )}
+                  </DropdownMenu>
+                )}
+              </div>
+            );
+          })}
         </div>
       </header>
 

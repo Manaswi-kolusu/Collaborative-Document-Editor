@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuthStore } from '../store/authStore';
-import { Loader2, FileText, ArrowRight } from 'lucide-react';
+import { Loader2, FileText, Mail, Lock, User, ArrowRight } from 'lucide-react';
 
 const Signup = () => {
   const [name, setName] = useState('');
@@ -22,83 +22,139 @@ const Signup = () => {
   };
 
   return (
-    <div className="flex min-h-screen bg-[#09090b] font-sans items-center justify-center p-4 relative">
-      <div className="absolute top-1/3 right-1/4 w-[400px] h-[400px] rounded-full bg-fuchsia-600/10 blur-[120px] pointer-events-none" />
-      <div className="absolute bottom-1/4 left-1/4 w-[300px] h-[300px] rounded-full bg-violet-600/8 blur-[100px] pointer-events-none" />
-
-      <div className="w-full max-w-[420px] relative z-10">
-        <Link to="/" className="flex items-center justify-center gap-2.5 mb-10">
-          <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-violet-500 to-fuchsia-600 flex items-center justify-center shadow-lg shadow-violet-500/20">
-            <FileText className="h-5 w-5 text-white" />
+    <div className="flex min-h-screen bg-white font-sans">
+      
+      {/* Left: Blue gradient panel */}
+      <div className="hidden lg:flex lg:w-[45%] bg-gradient-to-br from-indigo-600 via-blue-700 to-blue-800 relative overflow-hidden items-center justify-center p-12">
+        {/* Decorative shapes */}
+        <div className="absolute top-0 left-0 w-96 h-96 rounded-full bg-indigo-500/15 -translate-y-1/3 -translate-x-1/4" />
+        <div className="absolute bottom-0 right-0 w-72 h-72 rounded-full bg-blue-400/15 translate-y-1/4 translate-x-1/4" />
+        <div className="absolute top-1/3 right-1/3 w-32 h-32 rounded-full bg-white/5" />
+        
+        <div className="relative z-10 max-w-md">
+          <div className="flex items-center gap-3 mb-8">
+            <div className="w-12 h-12 rounded-2xl bg-white/15 backdrop-blur-sm flex items-center justify-center border border-white/20">
+              <FileText className="h-6 w-6 text-white" />
+            </div>
+            <span className="text-2xl font-bold text-white tracking-tight">CollabDoc</span>
           </div>
-          <span className="font-bold text-2xl tracking-tight text-white">CollabDoc</span>
-        </Link>
+          <h2 className="text-3xl font-bold text-white leading-tight mb-4">
+            Start building<br />together, today.
+          </h2>
+          <p className="text-blue-100/80 text-base leading-relaxed">
+            Create an account and start collaborating with your team in minutes. No setup required — just sign up and start writing.
+          </p>
+          
+          {/* Stats */}
+          <div className="grid grid-cols-3 gap-4 mt-10">
+            {[
+              { num: '10K+', label: 'Users' },
+              { num: '50K+', label: 'Documents' },
+              { num: '99.9%', label: 'Uptime' },
+            ].map((s) => (
+              <div key={s.label} className="text-center">
+                <p className="text-xl font-bold text-white">{s.num}</p>
+                <p className="text-xs text-blue-200/60 mt-0.5">{s.label}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
 
-        <div className="bg-[#111113] border border-white/[0.08] rounded-2xl p-8 shadow-2xl shadow-black/50">
-          <h1 className="text-2xl font-bold text-white mb-1 text-center">Create your account</h1>
-          <p className="text-sm text-zinc-500 mb-7 text-center">Start collaborating in seconds</p>
+      {/* Right: Signup Form */}
+      <div className="flex-1 flex items-center justify-center p-6 sm:p-12">
+        <div className="w-full max-w-[400px]">
+          
+          {/* Mobile logo */}
+          <div className="flex items-center justify-center gap-2 mb-8 lg:hidden">
+            <div className="bg-blue-600 rounded-xl p-2">
+              <FileText className="h-6 w-6 text-white" />
+            </div>
+            <span className="font-bold text-2xl text-gray-900">CollabDoc</span>
+          </div>
+
+          <div className="mb-8">
+            <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-2">Create your account</h1>
+            <p className="text-sm text-gray-500">Start collaborating in seconds</p>
+          </div>
 
           {error && (
-            <div className="mb-5 p-3 bg-red-500/10 border border-red-500/20 rounded-xl">
-              <p className="text-sm text-red-400">{error}</p>
+            <div className="mb-5 p-3.5 bg-red-50 border border-red-200 rounded-xl flex items-center gap-2">
+              <div className="w-2 h-2 rounded-full bg-red-500 shrink-0" />
+              <p className="text-sm text-red-600">{error}</p>
             </div>
           )}
 
           <form className="space-y-5" onSubmit={handleSubmit}>
             <div>
-              <label htmlFor="name" className="block text-xs font-medium text-zinc-400 mb-2">Full Name</label>
-              <input
-                id="name"
-                type="text"
-                required
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                className="block w-full px-4 py-3 bg-white/[0.04] border border-white/[0.08] rounded-xl text-white placeholder-zinc-600 focus:outline-none focus:ring-2 focus:ring-violet-500/50 focus:border-violet-500/50 transition-all text-sm"
-                placeholder="John Doe"
-              />
+              <label htmlFor="name" className="block text-sm font-medium text-gray-700 mb-2">
+                Full Name
+              </label>
+              <div className="relative">
+                <User className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+                <input
+                  id="name"
+                  type="text"
+                  required
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  className="block w-full pl-11 pr-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent focus:bg-white transition-all text-sm"
+                  placeholder="John Doe"
+                />
+              </div>
             </div>
 
             <div>
-              <label htmlFor="email" className="block text-xs font-medium text-zinc-400 mb-2">Email</label>
-              <input
-                id="email"
-                type="email"
-                autoComplete="email"
-                required
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                className="block w-full px-4 py-3 bg-white/[0.04] border border-white/[0.08] rounded-xl text-white placeholder-zinc-600 focus:outline-none focus:ring-2 focus:ring-violet-500/50 focus:border-violet-500/50 transition-all text-sm"
-                placeholder="you@example.com"
-              />
+              <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-2">
+                Email address
+              </label>
+              <div className="relative">
+                <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+                <input
+                  id="email"
+                  type="email"
+                  autoComplete="email"
+                  required
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  className="block w-full pl-11 pr-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent focus:bg-white transition-all text-sm"
+                  placeholder="you@example.com"
+                />
+              </div>
             </div>
 
             <div>
-              <label htmlFor="password" className="block text-xs font-medium text-zinc-400 mb-2">Password</label>
-              <input
-                id="password"
-                type="password"
-                autoComplete="new-password"
-                required
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className="block w-full px-4 py-3 bg-white/[0.04] border border-white/[0.08] rounded-xl text-white placeholder-zinc-600 focus:outline-none focus:ring-2 focus:ring-violet-500/50 focus:border-violet-500/50 transition-all text-sm"
-                placeholder="••••••••"
-              />
+              <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-2">
+                Password
+              </label>
+              <div className="relative">
+                <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+                <input
+                  id="password"
+                  type="password"
+                  autoComplete="new-password"
+                  required
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  className="block w-full pl-11 pr-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent focus:bg-white transition-all text-sm"
+                  placeholder="••••••••"
+                />
+              </div>
             </div>
 
             <button
               type="submit"
               disabled={loading}
-              className="w-full bg-gradient-to-r from-violet-600 to-fuchsia-600 hover:from-violet-500 hover:to-fuchsia-500 text-white font-semibold py-3 rounded-xl text-sm transition-all disabled:opacity-50 flex items-center justify-center gap-2 shadow-lg shadow-violet-600/20 cursor-pointer"
+              className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 rounded-xl text-sm transition-all disabled:opacity-50 flex items-center justify-center gap-2 shadow-lg shadow-blue-600/20 cursor-pointer active:scale-[0.98]"
             >
               {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <ArrowRight className="h-4 w-4" />}
               Create account
             </button>
           </form>
 
-          <div className="mt-6 text-center">
-            <span className="text-sm text-zinc-600">Already have an account?</span>{' '}
-            <Link to="/login" className="text-sm font-medium text-violet-400 hover:text-violet-300 transition-colors">
+          <div className="mt-8 text-center">
+            <span className="text-sm text-gray-500">Already have an account?</span>{' '}
+            <Link to="/login" className="text-sm font-semibold text-blue-600 hover:text-blue-700 transition-colors">
               Sign in
             </Link>
           </div>
